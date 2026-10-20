@@ -1,0 +1,662 @@
+---
+title: "Saxon State Election 2024: Sample and Descriptives"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: false
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+source(rprojroot::find_rstudio_root_file("code/10_helpers.R"))
+
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 6,
+  fig.height = 4,
+  fig.align = "center",
+  dpi = 300,
+  dev = "png",
+  comment = "",
+  error = FALSE
+)
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+options(width = 120) # same line width of printed output in RStudio and Rscript
+options(digits = 2)
+set.seed(2026)
+
+dir.create(file.path(rprojroot::find_rstudio_root_file(), "output/tables"), recursive = TRUE, showWarnings = FALSE)
+dir.create(file.path(rprojroot::find_rstudio_root_file(), "output/figures"), recursive = TRUE, showWarnings = FALSE)
+
+# Figures: save_figure() (10_helpers.R) saves every plot to data/processed/figures/<name>.rds
+# PDF in output/figures/ from this script: B4, B6
+# Subfigures, combined with the federal ones only in 40_combine_figures.Rmd: 1b, B1b, B2c, B2d
+```
+
+The PTV item of each party.
+
+```{r constants}
+ptv_col_by_party_saxony <- c(
+  "AfD"         = "ptv_afd",
+  "BSW"         = "ptv_bsw",
+  "CDU"         = "ptv_cdu",
+  "FDP"         = "ptv_fdp",
+  "Greens"      = "ptv_gruene",
+  "Left"        = "ptv_linke",
+  "SPD"         = "ptv_spd",
+  "Free Voters" = "ptv_fw"
+)
+```
+
+```{r data}
+load("data/processed/data_saxony.rdata")
+load("data/processed/data_saxony_long.rdata")
+```
+
+
+# Data
+
+## Exclusion of Satisficers
+
+Respondents who allocated 100% to one party are excluded as satisficers (paper section Data).
+For each respondent, the number of sliders set to 100 is counted, and respondents with one such slider are flagged as `excluded`.
+Two data sets are kept for every later step:
+
+- `data_saxony_main`: the analytic sample, without the excluded respondents,
+- `data_saxony_noexcl`: all respondents, for the robustness checks without exclusions.
+
+The same split is made for the long data (one row per respondent and party).
+
+```{r exclusions}
+list_votes_exp_vars_saxony <- c(
+  "list_votes_exp_cdu", "list_votes_exp_afd", "list_votes_exp_linke",
+  "list_votes_exp_gruene", "list_votes_exp_spd", "list_votes_exp_fdp",
+  "list_votes_exp_bsw", "list_votes_exp_fw", "list_votes_exp_other"
+)
+
+data_saxony_noexcl <- data_saxony %>%
+  mutate(
+    n_100 = rowSums(across(all_of(list_votes_exp_vars_saxony)) == 100),
+    excluded = n_100 == 1,
+    excl_reason = if_else(excluded, "100 for one party", "included")
+  ) %>%
+  select(-n_100)
+
+data_saxony_long_noexcl <- data_saxony_long %>%
+  left_join(data_saxony_noexcl %>% select(ResponseId, excluded, excl_reason, zs_int), by = "ResponseId")
+
+data_saxony_main <- data_saxony_noexcl %>% filter(!excluded)
+data_saxony_long_main <- data_saxony_long_noexcl %>% filter(!excluded)
+```
+
+Recruited, excluded and analytic sample.
+
+```{r sample_sizes}
+data_saxony_noexcl %>% count(excl_reason)
+data_saxony_noexcl %>%
+  summarize(recruited = n(), analytic = sum(!excluded), excluded = sum(excluded))
+
+rm(data_saxony, data_saxony_long)
+```
+
+## Benchmarks for the Sample Composition
+
+The sample composition table (Table B.4) compares the sample with benchmarks from official statistics.
+This section builds one benchmark share per category of the table.
+
+Eligible voters by gender and age, from the representative electoral statistics of the 2024 state election (Statistisches Landesamt Sachsen).
+Age groups are combined into the age groups of the survey, and men include diverse and unspecified voters, as Men* in the survey.
+
+```{r benchmark_age_gender}
+df_saxony_rep <- read_excel(
+  "data/input/benchmark/statistik-sachsen_bVII2-3_saechsischer-landtag-repraesentative-wahlstatistik.xlsx",
+  sheet = 5, skip = 3
+) %>%
+  set_names(c(
+    "gender", "age_group", "wahlberechtigte_insgesamt",
+    "Wahlberechtigte \r\nmit Wahlschein", "Wahlberechtigte \r\nohne Wahlschein",
+    "Wähler/-innen\r\n(ohne Briefwahl)", "Nichtwähler/\r\n-innen"
+  ))
+
+df_gender_age_saxony <- df_saxony_rep %>%
+  filter(gender != "Insgesamt", age_group != "zusammen") %>%
+  mutate(
+    age_group = case_when(
+      age_group %in% c("18 bis unter 21", "21 bis unter 25", "25 bis unter 30") ~ "18-29",
+      age_group %in% c("30 bis unter 35", "35 bis unter 40") ~ "30-39",
+      age_group %in% c("40 bis unter 45", "45 bis unter 50") ~ "40-49",
+      age_group == "50 bis unter 60" ~ "50-59",
+      age_group %in% c("60 bis unter 70", "70 und älter") ~ "60+",
+      TRUE ~ NA_character_
+    ),
+    gender = case_when(
+      gender == "Männer, divers, o. A." ~ "Men",
+      gender == "Frauen" ~ "Women",
+      TRUE ~ NA_character_
+    ),
+    Wahlberechtigte = as.numeric(wahlberechtigte_insgesamt) * 1000
+  ) %>%
+  filter(!is.na(age_group), !is.na(gender)) %>%
+  group_by(age_group, gender) %>%
+  summarize(Wahlberechtigte = sum(Wahlberechtigte, na.rm = TRUE), .groups = "drop")
+
+# Totals by gender over all age groups
+df_gender_age_saxony <- df_gender_age_saxony %>%
+  bind_rows(
+    df_gender_age_saxony %>%
+      group_by(gender) %>%
+      summarize(Wahlberechtigte = sum(Wahlberechtigte), .groups = "drop") %>%
+      mutate(age_group = "Insgesamt")
+  )
+
+df_age_saxony <- df_gender_age_saxony %>%
+  filter(age_group != "Insgesamt") %>%
+  pivot_wider(names_from = gender, values_from = Wahlberechtigte) %>%
+  mutate(
+    eligible_age_group = Men + Women,
+    eligible_total     = sum(eligible_age_group),
+    benchmark          = eligible_age_group / eligible_total
+  ) %>%
+  select(age_group, benchmark)
+
+df_gender_saxony <- df_gender_age_saxony %>%
+  filter(age_group == "Insgesamt") %>%
+  select(-age_group) %>%
+  rename(eligible_gender_group = Wahlberechtigte) %>%
+  mutate(
+    eligible_total = sum(eligible_gender_group),
+    benchmark      = eligible_gender_group / eligible_total
+  ) %>%
+  select(gender, benchmark)
+```
+
+Benchmark of education: the school-leaving qualification of the Saxon population (Mikrozensus, GENESIS table 12211-1100).
+The qualifications are grouped into the three levels of the survey (Low, Medium, High) plus "Still in School".
+The census reports thousands of persons.
+
+```{r benchmark_education_vote_turnout}
+df_census_saxony_raw <- read_excel("data/input/benchmark/12211-1100_de.xlsx") %>%
+  set_names(c(
+    "gender", "age_group",
+    "Noch in schulischer Ausbildung", "Haupt- (Volks-)schulabschluss",
+    "Abschluss der polytechnischen Oberschule", "Realschule oder gleichwertiger Abschluss",
+    "Fachhochschul- oder Hochschulreife", "Ohne Angabe zur Art des Abschlusses",
+    "Ohne allgemeinen Schulabschluss", "Insgesamt"
+  ))
+
+df_educ_saxony <- df_census_saxony_raw %>%
+  drop_na("age_group") %>%
+  fill(gender, .direction = "down") %>%
+  filter(gender == "Insgesamt", age_group == "Insgesamt") %>%
+  select(-age_group, gender) %>%
+  mutate(across(.cols = everything(), .fns = ~ as.numeric(.)),
+    Low = `Haupt- (Volks-)schulabschluss` + `Ohne allgemeinen Schulabschluss`,
+    Medium = `Realschule oder gleichwertiger Abschluss` + `Abschluss der polytechnischen Oberschule`,
+    High = `Fachhochschul- oder Hochschulreife`,
+    `Still in School` = `Noch in schulischer Ausbildung`,
+    census_total = Insgesamt * 1000
+  ) %>%
+  select(Low, Medium, High, `Still in School`, census_total) %>%
+  pivot_longer(cols = Low:`Still in School`, names_to = "education_eng", values_to = "pop_clean") %>%
+  mutate(pop_clean = pop_clean * 1000, benchmark = pop_clean / census_total) %>%
+  select(education_eng, benchmark)
+```
+
+Benchmark of the vote intention: the election result.
+
+```{r benchmark_vote}
+zs_benchmark_saxony <- data_saxony_long_main %>%
+  distinct(party, list_votes_result) %>%
+  mutate(
+    party = if_else(party == "Others", "Other", party),
+    benchmark = list_votes_result / 100
+  ) %>%
+  select(list_vote_int_eng = party, benchmark)
+```
+
+Benchmark of the turnout intention: the turnout of the 2024 state election (74.4%).
+
+```{r benchmark_turnout}
+turnout_benchmark_saxony <- tibble(turnout_int_eng = "Yes", benchmark = 0.744)
+```
+
+## Response Times
+
+The H1 model controls for each respondent's general speed in the survey.
+This baseline speed is the log of the mean response time of five filler items (birth year, vote intention, eligibility, turnout intention, political interest).
+Item times more than two standard deviations from the item mean are left out of this mean.
+
+Response times of the expectation item more than two standard deviations above the mean are outliers and removed from the H1 models (paper section Modeling).
+Since the lower cutoff (mean - 2 SD) is negative, no response time is removed at the bottom.
+The output checks this (`TRUE` = lower cutoff below zero).
+
+```{r response_times}
+data_saxony_time_main <- add_baseline_speed(data_saxony_main) # helper
+data_saxony_time_noexcl <- add_baseline_speed(data_saxony_noexcl) # helper
+
+t_mean_saxony <- mean(data_saxony_time_main$t_list_votes_exp_Page_Submit, na.rm = TRUE)
+t_threshold_upper_saxony <- compute_time_cutoff(data_saxony_time_main$t_list_votes_exp_Page_Submit) # helper
+
+# No response lies more than 2 SD below the mean
+data_saxony_time_main %>%
+  summarize(lower_cutoff_below_zero = mean(t_list_votes_exp_Page_Submit) - 2 * sd(t_list_votes_exp_Page_Submit) < 0)
+
+data_saxony_time_main <- data_saxony_time_main %>%
+  mutate(t_outlier = t_list_votes_exp_Page_Submit > t_threshold_upper_saxony)
+
+data_saxony_time_main_nooutliers <- data_saxony_time_main %>% filter(!t_outlier)
+```
+
+Response times before outlier removal (paper section Modeling and note of Figure B.1).
+
+```{r times_before_removal}
+data_saxony_time_main %>%
+  summarize(
+    n = n(),
+    min = min(t_list_votes_exp_Page_Submit),
+    max = max(t_list_votes_exp_Page_Submit),
+    mean = mean(t_list_votes_exp_Page_Submit),
+    sd = sd(t_list_votes_exp_Page_Submit),
+    cutoff = t_threshold_upper_saxony,
+    n_removed = sum(t_outlier),
+    n_after_removal = sum(!t_outlier)
+  ) %>%
+  print_values(digits = 1) # helper
+```
+
+## Preferred Party (PTV, Vote Intention, Party Identification)
+
+H3 compares the forecast error for the respondent's preferred party with that for the other parties.
+The preferred party is the party with the highest propensity to vote (PTV).
+Respondents who give the highest PTV to more than one party have no clearly preferred party and are removed (paper section Modeling).
+
+Alternative measures (robustness checks):
+
+- PTV dummy, but allowing ties (all parties with the highest PTV count as preferred),
+- vote intention,
+- party identification,
+- the PTV score of each party (1-11) instead of a dummy.
+
+First, the party (or the tied parties, comma-separated) with the highest PTV of each respondent.
+
+```{r ptv_top}
+data_saxony_ptvtop_noexcl <- add_ptv_top(data_saxony_noexcl, ptv_col_by_party_saxony) # helper
+data_saxony_ptvtop_main <- data_saxony_ptvtop_noexcl %>% filter(!excluded)
+```
+
+Respondents with no PTV at all, with a tied highest PTV and with a clearly preferred party.
+
+```{r ptv_top_counts}
+data_saxony_ptvtop_main %>%
+  summarize(
+    no_ptv = nrow(data_saxony_main) - n(),
+    tied = sum(str_detect(preferred_party, ",")),
+    clear = sum(!str_detect(preferred_party, ","))
+  )
+```
+
+The clearly preferred party (PTV, without ties) is added to the long data.
+Respondents with tied PTVs get `NA`.
+
+```{r pref_long}
+data_saxony_long_noexcl <- data_saxony_long_noexcl %>%
+  left_join(
+    data_saxony_ptvtop_noexcl %>%
+      filter(!str_detect(preferred_party, ",")) %>%
+      select(ResponseId, preferred_party),
+    by = "ResponseId"
+  )
+data_saxony_long_main <- data_saxony_long_noexcl %>% filter(!excluded)
+```
+
+For every measure, a dummy in the long data: 1 if the party of the row is the respondent's preferred party, 0 if not.
+
+*Others* is left out, since it is no party one can prefer.
+The PTV score of the party of each row is added as well.
+
+```{r pref_dummies}
+pref_long_saxony <- create_pref_long_data(
+  data_saxony_long_noexcl, data_saxony_ptvtop_noexcl, # helper
+  ptv_col_by_party_saxony, parties_8_saxony
+)
+data_saxony_long_pref_main <- pref_long_saxony %>%
+  filter(!excluded) %>%
+  select(-excluded)
+```
+
+The model data of the H3 models, one data set per measure, for the main sample and without exclusions.
+Each keeps the rows with a non-missing value on its measure.
+The table shows the number of respondents and rows (respondent × party) per measure in the main sample.
+
+```{r pref_model_data}
+subsets_saxony_main <- create_pref_model_data(data_saxony_long_pref_main) # helper
+data_saxony_ptv_main <- subsets_saxony_main$ptv
+data_saxony_vi_main <- subsets_saxony_main$vi
+data_saxony_pid_main <- subsets_saxony_main$pid
+data_saxony_ptvscore_main <- subsets_saxony_main$ptvscore
+data_saxony_ptvties_main <- subsets_saxony_main$ptvties
+
+subsets_saxony_noexcl <- create_pref_model_data(pref_long_saxony %>% select(-excluded)) # helper
+data_saxony_ptv_noexcl <- subsets_saxony_noexcl$ptv
+data_saxony_vi_noexcl <- subsets_saxony_noexcl$vi
+data_saxony_pid_noexcl <- subsets_saxony_noexcl$pid
+data_saxony_ptvscore_noexcl <- subsets_saxony_noexcl$ptvscore
+data_saxony_ptvties_noexcl <- subsets_saxony_noexcl$ptvties
+
+subsets_saxony_main %>%
+  map_dfr(~ summarize(.x, respondents = n_distinct(ResponseId), rows = n()), .id = "measure")
+```
+
+For the descriptives of the preferred party (PTV): one row per respondent, the row of the preferred party.
+
+```{r pref_party_rows}
+data_saxony_prefparty_ptv_main <- create_pref_party_data(data_saxony_long_main, "preferred_party", parties_8_saxony) # helper
+
+rm(pref_long_saxony, subsets_saxony_main, subsets_saxony_noexcl, data_saxony_ptvtop_noexcl)
+```
+
+
+# Sample
+
+Size of the analytic sample and the experimental groups (paper section Data).
+
+```{r field_period}
+data_saxony_main %>% count(treatment)
+```
+
+Field period by recruitment channel.
+
+```{r field_period_recruit}
+data_saxony_main %>%
+  group_by(recruit) %>%
+  summarize(n = n(), first_day = min(interview_date), last_day = max(interview_date))
+```
+
+Commitment pledge not to consult outside sources (%).
+
+```{r pledge}
+data_saxony_noexcl %>%
+  count(pledge_expectations) %>%
+  mutate(pct = 100 * n / sum(n)) %>%
+  print_values() # helper
+```
+
+## Sample Composition (Table B.4)
+
+Sample before exclusions compared with the electorate (left) and change through the exclusions (right), also by recruitment channel.
+First, the benchmark of every category of the table.
+
+```{r benchmarks_by_category}
+df_benchmark_raw_saxony <- bind_rows(
+  compute_group_shares(data_saxony_main, "age_group", "Age Group", election = "saxony") %>% # helper
+    left_join(df_age_saxony %>% rename(category = age_group), by = "category"),
+  compute_group_shares(data_saxony_main, "gender_eng2", "Gender", election = "saxony") %>% # helper
+    left_join(df_gender_saxony %>% rename(category = gender), by = "category") %>%
+    mutate(category = if_else(category == "Men", "Men*", category)),
+  compute_group_shares(data_saxony_main, "education_eng", "Education", election = "saxony") %>% # helper
+    left_join(df_educ_saxony %>% rename(category = education_eng), by = "category"),
+  compute_group_shares(data_saxony_main, "turnout_int_eng", "Turnout Intention", election = "saxony") %>% # helper
+    filter(category == "Yes") %>%
+    left_join(turnout_benchmark_saxony %>% rename(category = turnout_int_eng), by = "category"),
+  compute_group_shares(data_saxony_main, "list_vote_int_eng", "Vote Intention", election = "saxony") %>% # helper
+    left_join(zs_benchmark_saxony %>% rename(category = list_vote_int_eng), by = "category")
+)
+
+df_benchmark_raw_saxony %>%
+  transmute(variable, category, benchmark_pct = 100 * benchmark) %>%
+  print_values(digits = 1) # helper
+```
+
+The table: shares in the sample before exclusions with the difference to the benchmark, and shares in the main sample with the change through the exclusions, overall, by recruitment channel and by experimental group.
+It is written to LaTeX and shown here as HTML.
+
+```{r table_B4, results='asis'}
+balance_specs_saxony <- tribble(
+  ~var,                ~label,
+  "age_group",         "Age Group",
+  "gender_eng2",       "Gender",
+  "education_eng",     "Education",
+  "turnout_int_eng",   "Turnout Intention",
+  "list_vote_int_eng", "Vote Intention"
+)
+
+balance_groups_saxony <- c(full = "All", oap = "OAP", sm = "SM", control = "C", t500 = "T(500)")
+
+df_balance_saxony <- compute_balance_shares_recruit_saxony(data_saxony_noexcl, balance_specs_saxony) %>% # helper
+  rename_with(~ sub("^share_", "before_", .x), starts_with("share_")) %>%
+  full_join(
+    compute_balance_shares_recruit_saxony(data_saxony_main, balance_specs_saxony) %>% # helper
+      rename_with(~ sub("^share_", "main_", .x), starts_with("share_")),
+    by = c("variable", "category")
+  ) %>%
+  mutate(across(starts_with(c("before_", "main_")), ~ coalesce(.x, 0))) %>%
+  left_join(df_benchmark_raw_saxony %>% select(variable, category, benchmark), by = c("variable", "category"))
+
+note_balance_saxony <- paste0(
+  "Note: Cells show the share of respondents (\\%) before exclusions (left) and in the main ",
+  "sample (right), overall, by recruitment channel (OAP = online access panel, SM = social media), ",
+  "and by experimental group. In the main sample, ",
+  format(nrow(data_saxony_noexcl) - nrow(data_saxony_main), big.mark = ","),
+  " respondents who allocated 100\\% to one party are excluded. ",
+  "For the overall sample, the difference to a benchmark is shown in percentage points in ",
+  "parentheses. For the main sample, the difference to the overall sample before exclusions ",
+  "is shown. Darker shading indicates larger absolute differences (scale up to 20 ",
+  "percentage points on the left and up to 5 percentage points on the right). ",
+  "Benchmarks are the eligible voting population for age and gender ",
+  "\\parencite{statistischeslandesamtdesfreistaatessachsenRepraesentativeWahlstatistik2024}, ",
+  "the overall population for education ",
+  "\\parencite{statistischesbundesamtdestatisCode122111100Tabelle2026}, election results ",
+  "for vote intention, and actual turnout for turnout intention ",
+  "\\parencite{statistischeslandesamtdesfreistaatessachsenWahlergebnisse2024}. ",
+  "Men* includes men and diverse respondents."
+)
+
+# Ten sample columns, hence a smaller font than in Table B.3
+write_balance_table( # helper
+  data = df_balance_saxony,
+  groups = balance_groups_saxony,
+  n_before = count_by_group(data_saxony_noexcl, election = "saxony"), # helper
+  n_main = count_by_group(data_saxony_main, election = "saxony"), # helper
+  caption = "Demographic Composition of the Saxon Sample (Before and After Exclusions)",
+  label = "tab:balance_table_saxony",
+  note = note_balance_saxony,
+  file = "output/tables/table_B4_balance_demographics_saxony.tex",
+  font_px = 9
+)
+```
+
+
+# Preference Measures (Figure B.4)
+
+Respondents with a preferred party (one of the eight parties) on at least one measure.
+
+```{r pref_compare}
+data_pref_ptv_vi_pid_saxony_main <- data_saxony_long_pref_main %>%
+  distinct(ResponseId, preferred_party_ptv_name, preferred_party_vi_name, preferred_party_pid_name) %>%
+  filter(
+    preferred_party_ptv_name %in% parties_8_saxony |
+      preferred_party_vi_name %in% parties_8_saxony |
+      preferred_party_pid_name %in% parties_8_saxony
+  )
+```
+
+Note of Figure B.4: respondents with at least one measure, share with a preferred party per measure, and agreement of the measures.
+
+```{r values_figure_B4}
+pref_measures_saxony <- data_pref_ptv_vi_pid_saxony_main %>%
+  transmute(ResponseId, ptv = preferred_party_ptv_name, vi = preferred_party_vi_name, pid = preferred_party_pid_name)
+
+pref_measures_saxony %>%
+  summarize(across(c(ptv, vi, pid), ~ sum(.x %in% parties_8_saxony))) %>%
+  pivot_longer(everything(), names_to = "measure", values_to = "n") %>%
+  mutate(pct = 100 * n / nrow(pref_measures_saxony)) %>%
+  add_row(measure = "at least one", n = nrow(pref_measures_saxony), pct = 100, .before = 1) %>%
+  print_values(digits = 1) # helper
+
+compute_pref_agreement(pref_measures_saxony, parties_8_saxony) %>% print_values(digits = 1) # helper
+```
+
+```{r figure_B4}
+party_order_saxony <- c("AfD", "Free Voters", "CDU", "FDP", "BSW", "SPD", "Greens", "Left")
+
+plot_alluvial_saxony <- plot_pref_flow(pref_measures_saxony, party_order_saxony) # helper
+plot_alluvial_saxony
+save_figure(plot_alluvial_saxony, "figure_B4_desc_pref_comparison_saxony",
+  election = "saxony", # helper
+  width = "landscape", aspect = 6 / 10
+)
+```
+
+
+# Response Times (Figures B.1, B.2)
+
+```{r figure_B1}
+plot_response_times_outliers_saxony <- plot_time_outliers(data_saxony_time_main, t_mean_saxony, t_threshold_upper_saxony) # helper
+plot_response_times_outliers_saxony
+save_figure(plot_response_times_outliers_saxony, "figure_B1b_desc_time_dist_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 6 / 8
+)
+```
+
+Response times in seconds and logged (dependent variable of H1), without outliers.
+
+```{r figure_B2}
+plot_response_times_s_saxony <- plot_time_hist(data_saxony_time_main_nooutliers, "t_list_votes_exp_Page_Submit", # helper
+  "Time in Seconds",
+  election = "saxony"
+)
+plot_response_times_log_saxony <- plot_time_hist(data_saxony_time_main_nooutliers, "t_list_votes_exp_Page_Submit_log", # helper
+  "log(seconds)",
+  election = "saxony"
+)
+plot_response_times_s_saxony
+plot_response_times_log_saxony
+
+save_figure(plot_response_times_s_saxony, "figure_B2c_desc_time_hist_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 6 / 8
+)
+save_figure(plot_response_times_log_saxony, "figure_B2d_desc_time_loghist_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 6 / 8
+)
+```
+
+
+# Vote Share Expectations (Figure 1, Table B.6)
+
+```{r figure_1b}
+plot_voteshare_dist_saxony <- plot_vote_share_dist(data_saxony_long_main, election = "saxony") # helper
+save_figure(plot_voteshare_dist_saxony, "figure_1b_desc_voteshare_dist_saxony",
+  election = "saxony", # helper
+  width = "half", aspect = 8 / 12
+)
+plot_voteshare_dist_saxony
+```
+
+Spread of the individual expectations per party (paper section Data).
+
+```{r spread_expectations}
+data_saxony_long_main %>%
+  group_by(party) %>%
+  summarize(result = first(list_votes_result), mean = mean(list_votes_exp), sd = sd(list_votes_exp)) %>%
+  arrange(sd) %>%
+  print_values(digits = 2) # helper
+```
+
+Mean, deviation from the result and SD per party, overall and by group.
+
+```{r table_B6}
+accuracy_input_saxony <- data_saxony_long_main %>% mutate(party = recode_party_names_saxony(party)) # helper
+
+accuracy_table_data_saxony <- compute_accuracy_by_group(accuracy_input_saxony, "all", election = "saxony") %>% # helper
+  left_join(compute_accuracy_by_group(filter(accuracy_input_saxony, treatment == "Control"), "c", election = "saxony"), # helper
+    by = c("party", "list_votes_result")
+  ) %>%
+  left_join(compute_accuracy_by_group(filter(accuracy_input_saxony, treatment == "Treatment (500)"), "t500", election = "saxony"), # helper
+    by = c("party", "list_votes_result")
+  ) %>%
+  arrange(party)
+
+write_accuracy_table( # helper
+  accuracy_table_data_saxony,
+  groups  = c(all = "Full Sample", c = "Control", t500 = "Treatment (500)"),
+  caption = "Forecasting Accuracy by Party and Treatment Group (Saxony)",
+  label   = "tab:accuracy_saxony",
+  note    = note_accuracy,
+  file    = "output/tables/table_B6_accuracy_saxony.tex"
+)
+```
+
+
+# Forecast Error for the Preferred Party (Figure B.6)
+
+```{r figure_B6}
+plot_pref_boxplot_saxony <- plot_pref_boxplot(data_saxony_prefparty_ptv_main) # helper
+plot_pref_boxplot_saxony
+save_figure(plot_pref_boxplot_saxony, "figure_B6_desc_pref_boxplot_ptv_saxony",
+  election = "saxony", # helper
+  width = "boxplot", aspect = 6 / 8
+)
+```
+
+Note of Figure B.6: preferred parties, share underestimating them, and observed and possible range of the forecast error (sliders from 0 to 100).
+
+```{r values_figure_B6}
+data_saxony_prefparty_ptv_main %>%
+  group_by(party) %>%
+  summarize(
+    n = n(), pct_underestimated = 100 * mean(list_votes_exp_diff < 0),
+    observed_min = min(list_votes_exp_diff), observed_max = max(list_votes_exp_diff),
+    possible_min = -first(list_votes_result), possible_max = 100 - first(list_votes_result),
+    .groups = "drop"
+  ) %>%
+  mutate(pct_respondents = 100 * n / sum(n)) %>%
+  arrange(desc(n)) %>%
+  print_values(digits = 1) # helper
+```
+
+Share underestimating the preferred party, overall (%).
+
+```{r underestimated}
+data_saxony_prefparty_ptv_main %>%
+  summarize(pct_underestimated = 100 * mean(list_votes_exp_diff < 0))
+```
+
+Highest PTV score of the preferred party.
+
+```{r ptv_score_preferred}
+data_saxony_ptv_main %>%
+  filter(preferred_party_ptv_dummy == 1) %>%
+  count(ptv_score) %>%
+  mutate(pct = 100 * n / sum(n)) %>%
+  arrange(desc(ptv_score)) %>%
+  print_values(digits = 2) # helper
+```
+
+
+# Save for the Analysis
+
+The analysis data sets are saved to `data/processed/`.
+
+```{r save}
+save(data_saxony_main,                 file = "data/processed/data_saxony_main.rdata")
+save(data_saxony_noexcl,               file = "data/processed/data_saxony_noexcl.rdata")
+save(data_saxony_time_main_nooutliers, file = "data/processed/data_saxony_time_main_nooutliers.rdata")
+save(data_saxony_time_noexcl,          file = "data/processed/data_saxony_time_noexcl.rdata")
+save(data_saxony_ptv_main,             file = "data/processed/data_saxony_ptv_main.rdata")
+save(data_saxony_ptv_noexcl,           file = "data/processed/data_saxony_ptv_noexcl.rdata")
+save(data_saxony_ptvties_main,         file = "data/processed/data_saxony_ptvties_main.rdata")
+save(data_saxony_ptvties_noexcl,       file = "data/processed/data_saxony_ptvties_noexcl.rdata")
+save(data_saxony_ptvscore_main,        file = "data/processed/data_saxony_ptvscore_main.rdata")
+save(data_saxony_ptvscore_noexcl,      file = "data/processed/data_saxony_ptvscore_noexcl.rdata")
+save(data_saxony_vi_main,              file = "data/processed/data_saxony_vi_main.rdata")
+save(data_saxony_vi_noexcl,            file = "data/processed/data_saxony_vi_noexcl.rdata")
+save(data_saxony_pid_main,             file = "data/processed/data_saxony_pid_main.rdata")
+save(data_saxony_pid_noexcl,           file = "data/processed/data_saxony_pid_noexcl.rdata")
+```

@@ -1,0 +1,50 @@
+
+\begin{table}[t]
+\captionsetup{skip=3pt}
+\caption{Linear Regression Models for the Federal Election Without Exclusions}
+\centering
+\footnotesize
+\renewcommand{\arraystretch}{0.9}
+\begin{tabular}{l *{8}{>{\centering\arraybackslash}p{2cm}}}
+\toprule
+ & \multicolumn{1}{c}{H1} & \multicolumn{2}{c}{H2} & \multicolumn{5}{c}{H3} \\
+\cmidrule(lr){2-2} \cmidrule(lr){3-4} \cmidrule(lr){5-9}
+ & \multicolumn{1}{c}{Time} & \multicolumn{1}{c}{MAE} & \multicolumn{1}{c}{RMSE} & \multicolumn{1}{c}{PTV Dummy} & \multicolumn{1}{c}{\makecell{PTV Dummy \\ (incl. Ties)}} & \multicolumn{1}{c}{VI Dummy} & \multicolumn{1}{c}{PID Dummy} & \multicolumn{1}{c}{PTV Score} \\
+\cmidrule(lr){2-2} \cmidrule(lr){3-3} \cmidrule(lr){4-4} \cmidrule(lr){5-5} \cmidrule(lr){6-6} \cmidrule(lr){7-7} \cmidrule(lr){8-8} \cmidrule(lr){9-9}
+ & (1) & (2a) & (2b) & (3a) & (3b) & (3c) & (3d) & (3e) \\
+\midrule
+Intercept                & $2.91^{***}$ & $4.63^{***}$  & $5.75^{***}$  & $-0.96^{***}$ & $-0.88^{***}$ & $-1.04^{***}$ & $-0.48^{***}$ & $-3.14^{***}$ \\
+                         & $(0.08)$     & $(0.43)$      & $(0.53)$      & $(0.18)$      & $(0.17)$      & $(0.14)$      & $(0.11)$      & $(0.21)$      \\
+T(5) (ref: C)            & $0.09^{***}$ & $-0.28^{***}$ & $-0.34^{***}$ & $0.09^{**}$   & $0.09^{**}$   & $0.11^{***}$  & $0.15^{***}$  & $0.33^{***}$  \\
+                         & $(0.01)$     & $(0.05)$      & $(0.06)$      & $(0.03)$      & $(0.03)$      & $(0.03)$      & $(0.04)$      & $(0.07)$      \\
+T(500)                   & $0.14^{***}$ & $-0.43^{***}$ & $-0.52^{***}$ & $0.12^{***}$  & $0.14^{***}$  & $0.16^{***}$  & $0.20^{***}$  & $0.46^{***}$  \\
+                         & $(0.01)$     & $(0.05)$      & $(0.06)$      & $(0.03)$      & $(0.03)$      & $(0.03)$      & $(0.04)$      & $(0.07)$      \\
+Baseline Speed           & $0.37^{***}$ &               &               &               &               &               &               &               \\
+                         & $(0.01)$     &               &               &               &               &               &               &               \\
+Survey Duration          & $0.00^{***}$ &               &               &               &               &               &               &               \\
+                         & $(0.00)$     &               &               &               &               &               &               &               \\
+Preferred Party          &              &               &               & $7.34^{***}$  & $5.87^{***}$  & $7.53^{***}$  & $6.71^{***}$  &               \\
+                         &              &               &               & $(0.13)$      & $(0.11)$      & $(0.12)$      & $(0.18)$      &               \\
+T(5) x Preferred Party   &              &               &               & $-0.45^{**}$  & $-0.42^{**}$  & $-0.55^{***}$ & $-0.76^{**}$  &               \\
+                         &              &               &               & $(0.17)$      & $(0.15)$      & $(0.16)$      & $(0.24)$      &               \\
+T(500) x Preferred Party &              &               &               & $-0.65^{***}$ & $-0.50^{***}$ & $-0.90^{***}$ & $-0.97^{***}$ &               \\
+                         &              &               &               & $(0.17)$      & $(0.15)$      & $(0.16)$      & $(0.24)$      &               \\
+PTV Score                &              &               &               &               &               &               &               & $0.87^{***}$  \\
+                         &              &               &               &               &               &               &               & $(0.01)$      \\
+T(5) x PTV Score         &              &               &               &               &               &               &               & $-0.07^{***}$ \\
+                         &              &               &               &               &               &               &               & $(0.02)$      \\
+T(500) x PTV Score       &              &               &               &               &               &               &               & $-0.10^{***}$ \\
+                         &              &               &               &               &               &               &               & $(0.02)$      \\
+Date Fixed Effects & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+Party Fixed Effects & - & - & - & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+Clustered SE & - & - & - & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+\midrule
+R$^2$                    & $0.09$       & $0.01$        & $0.01$        & $0.15$        & $0.12$        & $0.15$        & $0.14$        & $0.16$        \\
+Adj. R$^2$               & $0.09$       & $0.01$        & $0.01$        & $0.15$        & $0.12$        & $0.14$        & $0.14$        & $0.16$        \\
+Num. obs.                & $29049$      & $29195$       & $29195$       & $163754$      & $204071$      & $174538$      & $75299$       & $202580$      \\
+Num. respondents & $29049$ & $29195$ & $29195$ & $23570$ & $29153$ & $24934$ & $10757$ & $29153$ \\
+\bottomrule
+\multicolumn{9}{l}{\parbox{\dimexpr\linewidth-2\tabcolsep\relax}{\scriptsize{Note: * p < 0.05, ** p < 0.01, *** p < 0.001. Same models as Table~\ref{tab:models_federal}, but including those respondents who answered 50\% twice.}}}
+\end{tabular}
+\label{tab:models_federal_noexcl}
+\end{table}

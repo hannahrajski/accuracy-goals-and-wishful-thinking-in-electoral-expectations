@@ -1,0 +1,1061 @@
+---
+title: "Saxon State Election 2024: Analyses"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: false
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+source(rprojroot::find_rstudio_root_file("code/10_helpers.R"))
+
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 6,
+  fig.height = 4,
+  fig.align = "center",
+  dpi = 300,
+  dev = "png",
+  comment = "",
+  error = FALSE
+)
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+options(width = 120) # same line width of printed output in RStudio and Rscript
+options(digits = 3)
+set.seed(2026)
+
+dir.create(file.path(rprojroot::find_rstudio_root_file(), "output/tables"), recursive = TRUE, showWarnings = FALSE)
+dir.create(file.path(rprojroot::find_rstudio_root_file(), "output/figures"), recursive = TRUE, showWarnings = FALSE)
+
+# Figures: save_figure() (10_helpers.R) saves every plot to data/processed/figures/<name>.rds
+# PDF in output/figures/ from this script: C8
+# Subfigures, combined with the federal ones only in 40_combine_figures.Rmd:
+#   main text: 2c, 2d, 3c, 3d, 4b (also panel d of B7), 5c, 5d
+#   appendix:  B7c, C1c, C1d, C2c, C2d, C3c, C3d, C4c, C4d, C5c, C5d, C6c, C6d, C7b,
+#              C9c, C9d, C10c, C10d, C11c, C11d, C12c, C12d
+```
+
+
+```{r load}
+load("data/processed/data_saxony_main.rdata")
+load("data/processed/data_saxony_noexcl.rdata")
+load("data/processed/data_saxony_time_main_nooutliers.rdata")
+load("data/processed/data_saxony_time_noexcl.rdata")
+load("data/processed/data_saxony_ptv_main.rdata")
+load("data/processed/data_saxony_ptv_noexcl.rdata")
+load("data/processed/data_saxony_ptvties_main.rdata")
+load("data/processed/data_saxony_ptvties_noexcl.rdata")
+load("data/processed/data_saxony_ptvscore_main.rdata")
+load("data/processed/data_saxony_ptvscore_noexcl.rdata")
+load("data/processed/data_saxony_vi_main.rdata")
+load("data/processed/data_saxony_vi_noexcl.rdata")
+load("data/processed/data_saxony_pid_main.rdata")
+load("data/processed/data_saxony_pid_noexcl.rdata")
+```
+
+
+# H1: Response Latency
+
+## Model 1
+
+Logged response latency on treatment, logged baseline speed, survey duration
+and survey date fixed effects (Table C.2).
+
+```{r m_time}
+m_time_full_saxony <- lm(t_list_votes_exp_Page_Submit_log ~ treatment + baseline_speed + duration + lead_time,
+  data = data_saxony_time_main_nooutliers
+)
+summary(m_time_full_saxony)
+```
+
+Predicted latencies in seconds (Rittmann et al. 2025) for an average case:
+baseline speed and duration at their means, lead time of 20 days.
+
+```{r time_simulation}
+scenario_means_saxony <- data_saxony_time_main_nooutliers %>%
+  summarize(baseline_speed = mean(baseline_speed), duration = mean(duration))
+scenario_means_saxony
+
+set.seed(20240901)
+m_time_full_avg_case_sim_saxony <- simloglm(m_time_full_saxony, scenario = list(
+  treatment = c("Control", "Treatment (500)"),
+  baseline_speed = scenario_means_saxony$baseline_speed,
+  duration = scenario_means_saxony$duration,
+  lead_time = "20"
+))
+
+# First difference of the two scenarios
+time_diffs_saxony <- list("T(500) - C" = NULL)
+```
+
+## Figure 2: Conditional Median
+
+```{r figure_2}
+time_median_saxony <- compute_time_effects(m_time_full_avg_case_sim_saxony, "median", time_diffs_saxony) # helper
+
+plot_time_median_saxony <- plot_time_pred( # helper
+  create_time_pred_data(time_median_saxony$summary, "Cond. Median", election = "saxony"), # helper
+  stat = "Cond. Median", election = "saxony",
+  x_limits = x_limits_time_median, x_breaks = x_breaks_time_median
+)
+plot_time_median_saxony
+save_figure(plot_time_median_saxony, "figure_2c_h1_median_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 1 / 2
+)
+
+plot_time_median_fd_saxony <- plot_time_diff( # helper
+  create_time_diff_data(time_median_saxony$diff, "FD Median"), # helper
+  stat = "FD Median", election = "saxony",
+  names_vec = names(time_diffs_saxony),
+  x_limits = x_limits_time_fd_median, x_breaks = x_breaks_time_fd_median
+)
+plot_time_median_fd_saxony
+save_figure(plot_time_median_fd_saxony, "figure_2d_h1_median_fd_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 1 / 2
+)
+```
+
+```{r values_figure_2}
+create_time_pred_data(time_median_saxony$summary, "Cond. Median", election = "saxony") %>% print_values(digits = 1) # helper
+create_time_diff_data(time_median_saxony$diff, "FD Median") %>% print_values(digits = 1) # helper
+```
+
+## Figure C.1: Conditional Mean
+
+```{r figure_C1}
+time_mean_saxony <- compute_time_effects(m_time_full_avg_case_sim_saxony, "mean", time_diffs_saxony) # helper
+
+plot_time_mean_saxony <- plot_time_pred( # helper
+  create_time_pred_data(time_mean_saxony$summary, "Cond. Mean", election = "saxony"), # helper
+  stat = "Cond. Mean", election = "saxony",
+  x_limits = x_limits_time_mean, x_breaks = x_breaks_time_mean
+)
+plot_time_mean_saxony
+save_figure(plot_time_mean_saxony, "figure_C1c_h1_mean_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 1 / 2
+)
+
+plot_time_mean_fd_saxony <- plot_time_diff( # helper
+  create_time_diff_data(time_mean_saxony$diff, "FD Mean"), # helper
+  stat = "FD Mean", election = "saxony",
+  names_vec = names(time_diffs_saxony)
+)
+plot_time_mean_fd_saxony
+save_figure(plot_time_mean_fd_saxony, "figure_C1d_h1_mean_fd_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 1 / 2
+)
+```
+
+```{r values_figure_C1}
+create_time_pred_data(time_mean_saxony$summary, "Cond. Mean", election = "saxony") %>% print_values(digits = 1) # helper
+create_time_diff_data(time_mean_saxony$diff, "FD Mean") %>% print_values(digits = 1) # helper
+```
+
+
+# H2: Overall Accuracy
+
+## Model 2a: MAE (Figure 3)
+
+Individual MAE and RMSE (paper section Modeling and appendix section Plots Robustness Checks).
+
+```{r mae_descriptives}
+data_saxony_main %>%
+  summarize(across(
+    c(list_votes_exp_mae, list_votes_exp_rmse),
+    list(min = min, mean = mean, sd = sd, max = max)
+  )) %>%
+  print_values(digits = 2) # helper
+```
+
+```{r m_mae}
+m_mae_full_saxony <- lm(list_votes_exp_mae ~ treatment + lead_time, data = data_saxony_main)
+summary(m_mae_full_saxony)
+
+mae_saxony <- compute_treatment_effects(m_mae_full_saxony, data_saxony_main) # helper
+```
+
+```{r figure_3}
+plot_mae_saxony <- plot_accuracy_pred(mae_saxony$pred, "Average Predicted MAE\n(with 95% CI)", # helper
+  y_limits = c(4.2, 5.1), y_breaks = seq(4.2, 5.1, by = 0.1),
+  election = "saxony"
+)
+plot_mae_saxony
+save_figure(plot_mae_saxony, "figure_3c_h2_mae_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 1 / 2
+)
+
+plot_mae_fd_saxony <- plot_accuracy_diff(mae_saxony$diff, "Difference in Average Predicted MAE\n(with 95% CI)", # helper
+  y_limits = c(-0.5, 0), y_breaks = seq(-0.5, 0, by = 0.1),
+  election = "saxony"
+)
+plot_mae_fd_saxony
+save_figure(plot_mae_fd_saxony, "figure_3d_h2_mae_fd_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 1 / 2
+)
+```
+
+```{r values_figure_3}
+print_values(mae_saxony$pred, c("treatment", est_cols)) # helper
+print_values(mae_saxony$diff, c("diff", est_cols)) # helper
+```
+
+## Model 2b: RMSE (Figure C.2)
+
+```{r m_rmse}
+m_rmse_full_saxony <- lm(list_votes_exp_rmse ~ treatment + lead_time, data = data_saxony_main)
+summary(m_rmse_full_saxony)
+
+rmse_saxony <- compute_treatment_effects(m_rmse_full_saxony, data_saxony_main) # helper
+```
+
+```{r figure_C2}
+plot_rmse_saxony <- plot_accuracy_pred(rmse_saxony$pred, "Average Predicted RMSE\n(with 95% CI)", # helper
+  y_limits = c(5.0, 6.8), y_breaks = seq(5.0, 6.8, by = 0.2),
+  election = "saxony"
+)
+plot_rmse_saxony
+save_figure(plot_rmse_saxony, "figure_C2c_h2_rmse_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 1 / 2
+)
+
+plot_rmse_fd_saxony <- plot_accuracy_diff(rmse_saxony$diff, "Difference in Average Predicted RMSE\n(with 95% CI)", # helper
+  y_limits = c(-0.7, 0), y_breaks = seq(-0.7, 0, by = 0.1),
+  election = "saxony"
+)
+plot_rmse_fd_saxony
+save_figure(plot_rmse_fd_saxony, "figure_C2d_h2_rmse_fd_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 1 / 2
+)
+```
+
+```{r values_figure_C2}
+print_values(rmse_saxony$pred, c("treatment", est_cols)) # helper
+print_values(rmse_saxony$diff, c("diff", est_cols)) # helper
+```
+
+## Heterogeneity by Education (Figure C.9)
+
+MAE on treatment interacted with educational attainment.
+
+```{r m_mae_educ}
+data_saxony_educ_main <- data_saxony_main %>%
+  filter(!is.na(education_eng), education_eng != "Still in School") %>%
+  mutate(education_eng = droplevels(factor(education_eng, levels = c("High", "Medium", "Low"))))
+
+m_mae_educ_saxony <- lm(list_votes_exp_mae ~ treatment * education_eng + lead_time,
+  data = data_saxony_educ_main
+)
+summary(m_mae_educ_saxony)
+data_saxony_educ_main %>% count(education_eng)
+
+mae_educ_saxony <- compute_treatment_effects(m_mae_educ_saxony, data_saxony_educ_main, by = "education_eng") # helper
+mae_educ_saxony$pred <- mae_educ_saxony$pred %>%
+  mutate(treatment = recode_groups_saxony(treatment)) # helper
+mae_educ_saxony$diff <- mae_educ_saxony$diff %>%
+  mutate(education_eng = factor(education_eng, levels = c("High", "Medium", "Low")))
+```
+
+```{r figure_C9}
+plot_mae_educ_saxony <- plot_by_moderator( # helper
+  mae_educ_saxony$pred, "education_eng", "Education", "Average Predicted MAE\n(with 95% CI)",
+  election = "saxony", n_breaks = 6
+)
+plot_mae_educ_saxony
+save_figure(plot_mae_educ_saxony, "figure_C9c_h2_mae_educ_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 4 / 7
+)
+
+plot_mae_educ_fd_saxony <- plot_by_moderator( # helper
+  mae_educ_saxony$diff, "education_eng", "Education", "Difference in Average Predicted MAE\n(with 95% CI)",
+  election = "saxony", diff = TRUE, y_limits = c(-1.2, 0.4), y_breaks = round(seq(-1.2, 0.4, by = 0.4), 1)
+)
+plot_mae_educ_fd_saxony
+save_figure(plot_mae_educ_fd_saxony, "figure_C9d_h2_mae_educ_fd_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 4 / 7
+)
+```
+
+```{r values_figure_C9}
+print_values(mae_educ_saxony$diff, c("education_eng", "diff", est_cols)) # helper
+```
+
+## Heterogeneity by Political Interest (Figure C.10)
+
+```{r m_mae_polint}
+pol_interest_levels_saxony <- c("sehr stark", "stark", "mittelmäßig", "weniger stark", "überhaupt nicht")
+
+data_saxony_polint_main <- data_saxony_main %>%
+  filter(!is.na(pol_interest)) %>%
+  mutate(pol_interest = recode_pol_interest(pol_interest, pol_interest_levels_saxony)) # helper
+
+m_mae_polint_saxony <- lm(list_votes_exp_mae ~ treatment * pol_interest + lead_time,
+  data = data_saxony_polint_main
+)
+summary(m_mae_polint_saxony)
+data_saxony_polint_main %>% count(pol_interest)
+
+mae_polint_saxony <- compute_treatment_effects(m_mae_polint_saxony, data_saxony_polint_main, by = "pol_interest") # helper
+mae_polint_saxony$pred <- mae_polint_saxony$pred %>%
+  mutate(treatment = recode_groups_saxony(treatment)) # helper
+mae_polint_saxony$diff <- mae_polint_saxony$diff %>%
+  mutate(pol_interest = factor(pol_interest, levels = levels(data_saxony_polint_main$pol_interest)))
+```
+
+```{r figure_C10}
+plot_mae_polint_saxony <- plot_by_moderator( # helper
+  mae_polint_saxony$pred, "pol_interest", "Political Interest", "Average Predicted MAE\n(with 95% CI)",
+  election = "saxony"
+)
+plot_mae_polint_saxony
+save_figure(plot_mae_polint_saxony, "figure_C10c_h2_mae_polint_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 5 / 8
+)
+
+plot_mae_polint_fd_saxony <- plot_by_moderator( # helper
+  mae_polint_saxony$diff, "pol_interest", "Political Interest", "Difference in Average Predicted MAE\n(with 95% CI)",
+  election = "saxony", diff = TRUE
+)
+plot_mae_polint_fd_saxony
+save_figure(plot_mae_polint_fd_saxony, "figure_C10d_h2_mae_polint_fd_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 5 / 8
+)
+```
+
+
+# H3: Wishful Thinking
+
+## Wishful Thinking by Party (Figures 4 and B.7)
+
+One model per party: forecast error on whether the party is the respondent's
+preferred party (highest PTV).
+
+```{r wt_byparty}
+wt_byparty_ptv_saxony <- fit_wt_by_party(data_saxony_ptv_main, "preferred_party_ptv_dummy", # helper
+  parties_8_saxony,
+  election = "saxony"
+)
+
+plot_wt_byparty_saxony <- plot_wt_by_party_pred(wt_byparty_ptv_saxony$pred, election = "saxony") # helper
+plot_wt_byparty_saxony
+save_figure(plot_wt_byparty_saxony, "figure_B7c_h3_wt_byparty_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 6 / 8
+)
+
+plot_wt_byparty_fd_saxony <- plot_wt_by_party_diff(wt_byparty_ptv_saxony$diff, election = "saxony") # helper
+plot_wt_byparty_fd_saxony
+save_figure(plot_wt_byparty_fd_saxony, "figure_4b_h3_wt_byparty_fd_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 6 / 8
+)
+```
+
+```{r values_figure_4}
+print_values(wt_byparty_ptv_saxony$pred, c("party", "preferred_party_dummy", est_cols)) # helper
+print_values(wt_byparty_ptv_saxony$diff, c("party", "diff", est_cols), digits = 1) # helper
+```
+
+## Model 3a: Preferred Party by PTV Dummy (Figure 5)
+
+Forecast error on treatment interacted with the preferred-party dummy, with
+survey date and party fixed effects. Standard errors are clustered by respondent.
+
+```{r m_pref_ptv}
+m_pref_ptv_saxony <- lm(list_votes_exp_diff ~ treatment * preferred_party_ptv_dummy + lead_time + party,
+  data = data_saxony_ptv_main
+)
+lmtest::coeftest(m_pref_ptv_saxony, vcov = sandwich::vcovCL(m_pref_ptv_saxony, cluster = ~ResponseId))
+count_model_n(m_pref_ptv_saxony, data_saxony_ptv_main) # helper
+
+ptv_saxony <- compute_treatment_effects(m_pref_ptv_saxony, data_saxony_ptv_main, # helper
+  by = "preferred_party_ptv_dummy", vcov = ~ResponseId
+)
+```
+
+```{r figure_5}
+plot_pref_ptv_saxony <- plot_wishful_thinking_pred(ptv_saxony$pred, "preferred_party_ptv_dummy", # helper
+  election = "saxony"
+)
+plot_pref_ptv_saxony
+save_figure(plot_pref_ptv_saxony, "figure_5c_h3_ptv_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 1 / 2
+)
+
+plot_pref_ptv_fd_saxony <- plot_wishful_thinking_diff(ptv_saxony$diff, "preferred_party_ptv_dummy", # helper
+  election = "saxony",
+  y_limits = c(-2.5, 0.5),
+  y_breaks = seq(-2.5, 0.5, by = 0.5)
+)
+plot_pref_ptv_fd_saxony
+save_figure(plot_pref_ptv_fd_saxony, "figure_5d_h3_ptv_fd_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 1 / 2
+)
+```
+
+```{r values_figure_5}
+print_values(ptv_saxony$pred, c("treatment", "preferred_party_ptv_dummy", est_cols)) # helper
+print_values(ptv_saxony$diff, c("diff", "preferred_party_ptv_dummy", est_cols)) # helper
+```
+
+## Model 3b: PTV Dummy Including Ties (Figure C.3)
+
+All parties sharing the highest PTV count as preferred.
+
+```{r m_pref_ptv_ties}
+m_pref_ptv_ties_saxony <- lm(list_votes_exp_diff ~ treatment * preferred_party_ptv_dummy_ties + lead_time + party,
+  data = data_saxony_ptvties_main
+)
+lmtest::coeftest(m_pref_ptv_ties_saxony, vcov = sandwich::vcovCL(m_pref_ptv_ties_saxony, cluster = ~ResponseId))
+count_model_n(m_pref_ptv_ties_saxony, data_saxony_ptvties_main) # helper
+
+ptv_ties_saxony <- compute_treatment_effects(m_pref_ptv_ties_saxony, data_saxony_ptvties_main, # helper
+  by = "preferred_party_ptv_dummy_ties", vcov = ~ResponseId
+)
+```
+
+```{r figure_C3}
+plot_pref_ptv_ties_saxony <- plot_wishful_thinking_pred(ptv_ties_saxony$pred, "preferred_party_ptv_dummy_ties", # helper
+  election = "saxony"
+)
+plot_pref_ptv_ties_saxony
+save_figure(plot_pref_ptv_ties_saxony, "figure_C3c_h3_ptv_ties_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 1 / 2
+)
+
+plot_pref_ptv_ties_fd_saxony <- plot_wishful_thinking_diff(ptv_ties_saxony$diff, "preferred_party_ptv_dummy_ties", # helper
+  election = "saxony",
+  y_limits = c(-2.5, 0.5),
+  y_breaks = seq(-2.5, 0.5, by = 0.5)
+)
+plot_pref_ptv_ties_fd_saxony
+save_figure(plot_pref_ptv_ties_fd_saxony, "figure_C3d_h3_ptv_ties_fd_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 1 / 2
+)
+```
+
+```{r values_figure_C3}
+print_values(ptv_ties_saxony$diff, c("diff", "preferred_party_ptv_dummy_ties", est_cols)) # helper
+```
+
+## Model 3c: Vote Intention (Figure C.4)
+
+```{r m_pref_vi}
+m_pref_vi_saxony <- lm(list_votes_exp_diff ~ treatment * preferred_party_vi_dummy + lead_time + party,
+  data = data_saxony_vi_main
+)
+lmtest::coeftest(m_pref_vi_saxony, vcov = sandwich::vcovCL(m_pref_vi_saxony, cluster = ~ResponseId))
+count_model_n(m_pref_vi_saxony, data_saxony_vi_main) # helper
+
+vi_saxony <- compute_treatment_effects(m_pref_vi_saxony, data_saxony_vi_main, # helper
+  by = "preferred_party_vi_dummy", vcov = ~ResponseId
+)
+```
+
+```{r figure_C4}
+plot_pref_vi_saxony <- plot_wishful_thinking_pred(vi_saxony$pred, "preferred_party_vi_dummy", # helper
+  election = "saxony",
+  y_limits = c(-4, 8), y_breaks = seq(-4, 8, by = 1)
+)
+plot_pref_vi_saxony
+save_figure(plot_pref_vi_saxony, "figure_C4c_h3_vi_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 1 / 2
+)
+
+plot_pref_vi_fd_saxony <- plot_wishful_thinking_diff(vi_saxony$diff, "preferred_party_vi_dummy", # helper
+  election = "saxony",
+  y_limits = c(-2.5, 0.5),
+  y_breaks = seq(-2.5, 0.5, by = 0.5)
+)
+plot_pref_vi_fd_saxony
+save_figure(plot_pref_vi_fd_saxony, "figure_C4d_h3_vi_fd_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 1 / 2
+)
+```
+
+```{r values_figure_C4}
+print_values(vi_saxony$diff, c("diff", "preferred_party_vi_dummy", est_cols)) # helper
+```
+
+## Model 3d: Party Identification (Figure C.5)
+
+```{r m_pref_pid}
+m_pref_pid_saxony <- lm(list_votes_exp_diff ~ treatment * preferred_party_pid_dummy + lead_time + party,
+  data = data_saxony_pid_main
+)
+lmtest::coeftest(m_pref_pid_saxony, vcov = sandwich::vcovCL(m_pref_pid_saxony, cluster = ~ResponseId))
+count_model_n(m_pref_pid_saxony, data_saxony_pid_main) # helper
+
+pid_saxony <- compute_treatment_effects(m_pref_pid_saxony, data_saxony_pid_main, # helper
+  by = "preferred_party_pid_dummy", vcov = ~ResponseId
+)
+```
+
+```{r figure_C5}
+plot_pref_pid_saxony <- plot_wishful_thinking_pred(pid_saxony$pred, "preferred_party_pid_dummy", # helper
+  election = "saxony",
+  y_limits = c(-4, 8), y_breaks = seq(-4, 8, by = 1)
+)
+plot_pref_pid_saxony
+save_figure(plot_pref_pid_saxony, "figure_C5c_h3_pid_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 1 / 2
+)
+
+plot_pref_pid_fd_saxony <- plot_wishful_thinking_diff(pid_saxony$diff, "preferred_party_pid_dummy", # helper
+  election = "saxony",
+  y_limits = c(-2.5, 0.5),
+  y_breaks = seq(-2.5, 0.5, by = 0.5)
+)
+plot_pref_pid_fd_saxony
+save_figure(plot_pref_pid_fd_saxony, "figure_C5d_h3_pid_fd_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 1 / 2
+)
+```
+
+```{r values_figure_C5}
+print_values(pid_saxony$diff, c("diff", "preferred_party_pid_dummy", est_cols)) # helper
+```
+
+## Model 3e: PTV Score (Figure C.6)
+
+Forecast error on treatment interacted with the PTV score (1-11) of each
+party.
+
+```{r m_pref_ptv_score}
+m_pref_ptv_score_saxony <- lm(list_votes_exp_diff ~ treatment * ptv_score + lead_time + party,
+  data = data_saxony_ptvscore_main
+)
+lmtest::coeftest(m_pref_ptv_score_saxony, vcov = sandwich::vcovCL(m_pref_ptv_score_saxony, cluster = ~ResponseId))
+count_model_n(m_pref_ptv_score_saxony, data_saxony_ptvscore_main) # helper
+
+ptv_score_saxony <- compute_treatment_effects(m_pref_ptv_score_saxony, data_saxony_ptvscore_main, # helper
+  by = "ptv_score", vcov = ~ResponseId
+)
+ptv_score_saxony$pred <- ptv_score_saxony$pred %>%
+  mutate(treatment = recode_groups_saxony(treatment)) # helper
+```
+
+```{r figure_C6}
+plot_ptv_score_saxony <- plot_ptv_score(ptv_score_saxony$pred, election = "saxony") # helper
+plot_ptv_score_saxony
+save_figure(plot_ptv_score_saxony, "figure_C6c_h3_ptvscore_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 8 / 9
+)
+
+plot_ptv_score_fd_saxony <- plot_ptv_score(ptv_score_saxony$diff, election = "saxony", diff = TRUE) # helper
+plot_ptv_score_fd_saxony
+save_figure(plot_ptv_score_fd_saxony, "figure_C6d_h3_ptvscore_fd_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 8 / 9
+)
+```
+
+Values at PTV 1 and 11 (paper section Results, robustness checks).
+
+```{r values_figure_C6}
+ptv_score_saxony$pred %>%
+  filter(ptv_score %in% c(1, 11)) %>%
+  print_values(c("treatment", "ptv_score", est_cols)) # helper
+ptv_score_saxony$diff %>%
+  filter(ptv_score %in% c(1, 11)) %>%
+  print_values(c("diff", "ptv_score", est_cols)) # helper
+```
+
+Lowest PTV score with a positive forecast error, by group.
+
+```{r ptv_score_positive_error}
+ptv_score_saxony$pred %>%
+  filter(estimate > 0) %>%
+  group_by(treatment) %>%
+  summarize(first_positive_score = min(ptv_score))
+```
+
+## Heterogeneity by Education (Figure C.11)
+
+Forecast error on treatment interacted with the preferred-party dummy (PTV)
+and educational attainment.
+
+```{r m_pref_ptv_educ}
+data_saxony_ptv_educ_main <- data_saxony_ptv_main %>%
+  left_join(data_saxony_main %>% select(ResponseId, education_eng), by = "ResponseId") %>%
+  filter(!is.na(education_eng), education_eng != "Still in School") %>%
+  mutate(education_eng = droplevels(factor(education_eng, levels = c("Low", "Medium", "High"))))
+
+m_pref_ptv_educ_saxony <- lm(
+  list_votes_exp_diff ~ treatment * preferred_party_ptv_dummy * education_eng + lead_time + party,
+  data = data_saxony_ptv_educ_main
+)
+count_model_n(m_pref_ptv_educ_saxony, data_saxony_ptv_educ_main) # helper
+
+ptv_educ_saxony <- compute_treatment_effects(m_pref_ptv_educ_saxony, data_saxony_ptv_educ_main, # helper
+  by = c("preferred_party_ptv_dummy", "education_eng"), vcov = ~ResponseId
+)
+ptv_educ_saxony$pred <- ptv_educ_saxony$pred %>%
+  mutate(
+    treatment = recode_groups_saxony(treatment), # helper
+    preferred_party_ptv_dummy = factor(preferred_party_ptv_dummy, labels = pref_label)
+  )
+ptv_educ_saxony$diff <- ptv_educ_saxony$diff %>%
+  mutate(
+    education_eng = factor(education_eng, levels = c("Low", "Medium", "High")),
+    preferred_party_ptv_dummy = factor(preferred_party_ptv_dummy, labels = pref_label)
+  )
+```
+
+```{r figure_C11}
+plot_ptv_educ_saxony <- plot_by_moderator( # helper
+  ptv_educ_saxony$pred, "education_eng", "Education", "Average Predicted Forecast Error\n(with 95% CI)",
+  election = "saxony", facet = TRUE, reverse_x = TRUE
+)
+plot_ptv_educ_saxony
+save_figure(plot_ptv_educ_saxony, "figure_C11c_h3_ptv_educ_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 6 / 8
+)
+
+plot_ptv_educ_fd_saxony <- plot_by_moderator( # helper
+  ptv_educ_saxony$diff, "education_eng", "Education", "Difference in Average Predicted Forecast Error\n(with 95% CI)",
+  election = "saxony", diff = TRUE, facet = TRUE, reverse_x = TRUE
+)
+plot_ptv_educ_fd_saxony
+save_figure(plot_ptv_educ_fd_saxony, "figure_C11d_h3_ptv_educ_fd_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 6 / 8
+)
+```
+
+```{r values_figure_C11}
+print_values(ptv_educ_saxony$diff, c("preferred_party_ptv_dummy", "education_eng", "diff", est_cols)) # helper
+```
+
+## Heterogeneity by Political Interest (Figure C.12)
+
+```{r m_pref_ptv_polint}
+data_saxony_ptv_polint_main <- data_saxony_ptv_main %>%
+  left_join(data_saxony_main %>% select(ResponseId, pol_interest), by = "ResponseId") %>%
+  filter(!is.na(pol_interest)) %>%
+  mutate(pol_interest = recode_pol_interest(pol_interest, pol_interest_levels_saxony)) %>% # helper
+  filter(!is.na(pol_interest))
+
+m_pref_ptv_polint_saxony <- lm(
+  list_votes_exp_diff ~ treatment * preferred_party_ptv_dummy * pol_interest + lead_time + party,
+  data = data_saxony_ptv_polint_main
+)
+count_model_n(m_pref_ptv_polint_saxony, data_saxony_ptv_polint_main) # helper
+
+ptv_polint_saxony <- compute_treatment_effects(m_pref_ptv_polint_saxony, data_saxony_ptv_polint_main, # helper
+  by = c("preferred_party_ptv_dummy", "pol_interest"), vcov = ~ResponseId
+)
+ptv_polint_saxony$pred <- ptv_polint_saxony$pred %>%
+  mutate(
+    treatment = recode_groups_saxony(treatment), # helper
+    preferred_party_ptv_dummy = factor(preferred_party_ptv_dummy, labels = pref_label)
+  )
+ptv_polint_saxony$diff <- ptv_polint_saxony$diff %>%
+  mutate(
+    pol_interest = factor(pol_interest, levels = levels(data_saxony_ptv_polint_main$pol_interest)),
+    preferred_party_ptv_dummy = factor(preferred_party_ptv_dummy, labels = pref_label)
+  )
+```
+
+```{r figure_C12}
+plot_ptv_polint_saxony <- plot_by_moderator( # helper
+  ptv_polint_saxony$pred, "pol_interest", "Political Interest", "Average Predicted Forecast Error\n(with 95% CI)",
+  election = "saxony", facet = TRUE
+)
+plot_ptv_polint_saxony
+save_figure(plot_ptv_polint_saxony, "figure_C12c_h3_ptv_polint_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 8 / 8
+)
+
+plot_ptv_polint_fd_saxony <- plot_by_moderator( # helper
+  ptv_polint_saxony$diff, "pol_interest", "Political Interest", "Difference in Average Predicted\nForecast Error\n(with 95% CI)",
+  election = "saxony", diff = TRUE, facet = TRUE
+)
+plot_ptv_polint_fd_saxony
+save_figure(plot_ptv_polint_fd_saxony, "figure_C12d_h3_ptv_polint_fd_saxony",
+  election = "saxony", # helper
+  width = "subfigure", aspect = 8 / 8
+)
+```
+
+```{r values_figure_C12}
+print_values(ptv_polint_saxony$diff, c("preferred_party_ptv_dummy", "pol_interest", "diff", est_cols)) # helper
+```
+
+
+# Regression Table (Table C.2)
+
+```{r table_C2}
+model_list_saxony <- list(
+  m_time_full_saxony,
+  m_mae_full_saxony,
+  m_rmse_full_saxony,
+  m_pref_ptv_saxony,
+  m_pref_ptv_ties_saxony,
+  m_pref_vi_saxony,
+  m_pref_pid_saxony,
+  m_pref_ptv_score_saxony
+)
+
+write_models_table( # helper
+  models      = model_list_saxony,
+  header      = header_models,
+  model_names = labels_models,
+  groups      = groups_models,
+  coef_map    = coef_map_saxony,
+  cluster_idx = 4:8,
+  caption     = "Linear Regression Models for Saxony",
+  label       = "tab:models_saxony",
+  note        = note_models,
+  file        = "output/tables/table_C2_models_saxony.tex"
+)
+```
+
+
+# Robustness: Without Excluding Satisficers
+
+## Who Was Excluded (Table C.4)
+
+Share excluded by experimental group (paper section Data).
+
+```{r exclusions_by_group}
+data_saxony_noexcl %>%
+  transmute(treatment = as.character(treatment), excluded) %>%
+  bind_rows(mutate(., treatment = "All")) %>%
+  group_by(treatment) %>%
+  summarize(n = n(), n_excluded = sum(excluded), share_excluded = mean(excluded), .groups = "drop") %>%
+  print_values(digits = 4) # helper
+```
+
+```{r table_C4}
+m_excl_logit_saxony_demo <- glm(
+  excluded ~ treatment + age_group + gender_eng2 + education_eng + turnout_int_dummy + recruit,
+  family = binomial,
+  data = data_saxony_noexcl
+)
+summary(m_excl_logit_saxony_demo)
+
+# Row labels and reference categories from the model
+coef_names_excl_saxony <- names(coef(m_excl_logit_saxony_demo))
+coef_map_excl_saxony <- coef_names_excl_saxony %>%
+  str_replace("^\\(Intercept\\)$", "Intercept") %>%
+  str_replace("^treatmentTreatment \\(500\\)$", "T(500)") %>%
+  str_replace("^age_group", "Age ") %>%
+  str_replace("^gender_eng2", "Gender: ") %>%
+  str_replace("^education_eng", "Education: ") %>%
+  str_replace("^turnout_int_dummyja$", "Intends to Vote") %>%
+  str_replace("^recruitSM$", "Recruited via Social Media") %>%
+  as.list() %>%
+  set_names(coef_names_excl_saxony)
+ref_excl_saxony <- m_excl_logit_saxony_demo$xlevels
+
+note_excl_logit_saxony <- paste0(
+  "Note: * p < 0.05, ** p < 0.01, *** p < 0.001. Logistic regression of being excluded ",
+  "(allocated 100\\% to one party) on treatment and respondent characteristics. ",
+  "Reference categories: Control group, age ", ref_excl_saxony$age_group[1],
+  ", gender ", ref_excl_saxony$gender_eng2[1], " (incl. diverse), education ",
+  ref_excl_saxony$education_eng[1], ", no turnout intention, recruited via online access panel. ",
+  "The large standard error of Still in School results from the absence of excluded respondents in this category."
+)
+
+write_logit_table( # helper
+  m_excl_logit_saxony_demo,
+  coef_map = coef_map_excl_saxony,
+  caption  = "Logistic Regression of Being Excluded (Allocated 100\\% to One Party) on Treatment and Respondent Characteristics (Saxony)",
+  label    = "tab:excl_logit_saxony",
+  note     = note_excl_logit_saxony,
+  file     = "output/tables/table_C4_exclusions_logit_saxony.tex"
+)
+```
+
+## Models Without Exclusions (Table C.6)
+
+All main models re-estimated on all respondents. The response time model still
+drops latency outliers (mean + 2 SD, computed in this sample).
+
+```{r models_noexcl}
+data_saxony_time_noexcl_nooutliers <- data_saxony_time_noexcl %>%
+  filter(t_list_votes_exp_Page_Submit <= compute_time_cutoff(t_list_votes_exp_Page_Submit)) # helper
+
+m_time_full_saxony_noexcl <- lm(t_list_votes_exp_Page_Submit_log ~ treatment + baseline_speed + duration + lead_time,
+  data = data_saxony_time_noexcl_nooutliers
+)
+m_mae_full_saxony_noexcl <- lm(list_votes_exp_mae ~ treatment + lead_time, data = data_saxony_noexcl)
+m_rmse_full_saxony_noexcl <- lm(list_votes_exp_rmse ~ treatment + lead_time, data = data_saxony_noexcl)
+m_pref_ptv_saxony_noexcl <- lm(list_votes_exp_diff ~ treatment * preferred_party_ptv_dummy + lead_time + party,
+  data = data_saxony_ptv_noexcl
+)
+m_pref_ptv_ties_saxony_noexcl <- lm(list_votes_exp_diff ~ treatment * preferred_party_ptv_dummy_ties + lead_time + party,
+  data = data_saxony_ptvties_noexcl
+)
+m_pref_vi_saxony_noexcl <- lm(list_votes_exp_diff ~ treatment * preferred_party_vi_dummy + lead_time + party,
+  data = data_saxony_vi_noexcl
+)
+m_pref_pid_saxony_noexcl <- lm(list_votes_exp_diff ~ treatment * preferred_party_pid_dummy + lead_time + party,
+  data = data_saxony_pid_noexcl
+)
+m_pref_ptv_score_saxony_noexcl <- lm(list_votes_exp_diff ~ treatment * ptv_score + lead_time + party,
+  data = data_saxony_ptvscore_noexcl
+)
+
+write_models_table( # helper
+  models = list(
+    m_time_full_saxony_noexcl, m_mae_full_saxony_noexcl, m_rmse_full_saxony_noexcl,
+    m_pref_ptv_saxony_noexcl, m_pref_ptv_ties_saxony_noexcl, m_pref_vi_saxony_noexcl,
+    m_pref_pid_saxony_noexcl, m_pref_ptv_score_saxony_noexcl
+  ),
+  header = header_models,
+  model_names = labels_models,
+  groups = groups_models,
+  coef_map = coef_map_saxony,
+  cluster_idx = 4:8,
+  caption = "Linear Regression Models for Saxony Without Exclusions",
+  label = "tab:models_saxony_noexcl",
+  note = "Note: * p < 0.05, ** p < 0.01, *** p < 0.001. Same models as Table~\\ref{tab:models_saxony}, but including those respondents who allocated 100\\% to one party.",
+  file = "output/tables/table_C6_models_noexcl_saxony.tex"
+)
+```
+
+## Main Sample vs. No Exclusions (Figure C.7b)
+
+H1 without exclusions, transformed to seconds as in Figure 2.
+
+```{r figure_C7b, fig.width=10, fig.height=9}
+set.seed(20240901)
+m_time_full_avg_case_sim_saxony_noexcl <- simloglm(m_time_full_saxony_noexcl, scenario = list(
+  treatment = c("Control", "Treatment (500)"),
+  baseline_speed = mean(data_saxony_time_noexcl_nooutliers$baseline_speed),
+  duration = mean(data_saxony_time_noexcl_nooutliers$duration),
+  lead_time = "20"
+))
+time_median_saxony_noexcl <- compute_time_effects(m_time_full_avg_case_sim_saxony_noexcl, "median", time_diffs_saxony) # helper
+
+treatments_saxony <- c("Control", "Treatment (500)")
+noexcl_comparison_saxony <- list(
+  compute_sample_effects_time(
+    m_time_full_avg_case_sim_saxony, treatments_saxony, # helper
+    time_median_saxony$diff, "Main", "H1: Response Time (s, median)"
+  ),
+  compute_sample_effects_time(
+    m_time_full_avg_case_sim_saxony_noexcl, treatments_saxony, # helper
+    time_median_saxony_noexcl$diff, "No excl.", "H1: Response Time (s, median)"
+  ),
+  compute_sample_effects(m_mae_full_saxony, data_saxony_main, "Main", "H2: MAE"), # helper
+  compute_sample_effects(m_mae_full_saxony_noexcl, data_saxony_noexcl, "No excl.", "H2: MAE"), # helper
+  compute_sample_effects(m_pref_ptv_saxony, data_saxony_ptv_main, "Main", "H3: Forecast Error (PTV)", # helper
+    by = "preferred_party_ptv_dummy", vcov = ~ResponseId
+  ),
+  compute_sample_effects(m_pref_ptv_saxony_noexcl, data_saxony_ptv_noexcl, "No excl.", "H3: Forecast Error (PTV)", # helper
+    by = "preferred_party_ptv_dummy", vcov = ~ResponseId
+  )
+)
+
+fd_noexcl_saxony <- map_dfr(noexcl_comparison_saxony, "diff") %>%
+  mutate(
+    outcome = factor(outcome, levels = sample_outcome_levels)
+  )
+print_values(fd_noexcl_saxony, c("outcome", "diff", "sample", est_cols)) # helper
+
+plot_noexcl_fd_saxony <- plot_sample_diff(fd_noexcl_saxony) # helper
+plot_noexcl_fd_saxony
+save_figure(plot_noexcl_fd_saxony, "figure_C7b_h123_noexcl_fd_saxony",
+  election = "saxony", # helper
+  width = "full", aspect = 8 / 12
+)
+```
+
+
+# Robustness: Recruitment Channel
+
+Models (1), (2a) and (3a) estimated separately for respondents recruited
+through the online access panel (OAP) and through social media (SM), with the
+same specifications, exclusions and latency outliers as the main models.
+
+## Models by Recruitment Channel (Table C.7)
+
+```{r models_recruit}
+data_saxony_main %>%
+  count(recruit, treatment) %>%
+  pivot_wider(names_from = treatment, values_from = n)
+
+ids_oap_saxony <- data_saxony_main %>% filter(recruit == "OAP") %>% pull(ResponseId)
+ids_sm_saxony <- data_saxony_main %>% filter(recruit == "SM") %>% pull(ResponseId)
+
+data_saxony_time_oap_main <- filter_ids(data_saxony_time_main_nooutliers, ids_oap_saxony) # helper
+data_saxony_time_sm_main <- filter_ids(data_saxony_time_main_nooutliers, ids_sm_saxony) # helper
+data_saxony_oap_main <- filter_ids(data_saxony_main, ids_oap_saxony) # helper
+data_saxony_sm_main <- filter_ids(data_saxony_main, ids_sm_saxony) # helper
+data_saxony_ptv_oap_main <- filter_ids(data_saxony_ptv_main, ids_oap_saxony) # helper
+data_saxony_ptv_sm_main <- filter_ids(data_saxony_ptv_main, ids_sm_saxony) # helper
+
+m_time_full_saxony_oap <- lm(t_list_votes_exp_Page_Submit_log ~ treatment + baseline_speed + duration + lead_time,
+  data = data_saxony_time_oap_main
+)
+m_time_full_saxony_sm <- lm(t_list_votes_exp_Page_Submit_log ~ treatment + baseline_speed + duration + lead_time,
+  data = data_saxony_time_sm_main
+)
+m_mae_full_saxony_oap <- lm(list_votes_exp_mae ~ treatment + lead_time, data = data_saxony_oap_main)
+m_mae_full_saxony_sm <- lm(list_votes_exp_mae ~ treatment + lead_time, data = data_saxony_sm_main)
+m_pref_ptv_saxony_oap <- lm(list_votes_exp_diff ~ treatment * preferred_party_ptv_dummy + lead_time + party,
+  data = data_saxony_ptv_oap_main
+)
+m_pref_ptv_saxony_sm <- lm(list_votes_exp_diff ~ treatment * preferred_party_ptv_dummy + lead_time + party,
+  data = data_saxony_ptv_sm_main
+)
+
+write_models_table( # helper
+  models = list(
+    m_time_full_saxony_oap, m_time_full_saxony_sm,
+    m_mae_full_saxony_oap, m_mae_full_saxony_sm,
+    m_pref_ptv_saxony_oap, m_pref_ptv_saxony_sm
+  ),
+  header = rep(c("OAP", "SM"), 3),
+  model_names = c("(1)", "(1)", "(2a)", "(2a)", "(3a)", "(3a)"),
+  groups = c(H1 = 2, H2 = 2, H3 = 2),
+  coef_map = coef_map_saxony,
+  cluster_idx = 5:6,
+  # narrower than the page: 1.4 cm columns, 14.2 cm note
+  col_width = "1.4cm",
+  note_width = "14.2cm",
+  caption = "Linear Regression Models for Saxony by Recruitment Channel",
+  label = "tab:models_recruit_saxony",
+  note = paste0(
+    "Note: * p < 0.05, ** p < 0.01, *** p < 0.001. Models (1), (2a) and (3a) of Table~\\ref{tab:models_saxony}, ",
+    "estimated separately for respondents recruited through the online access panel (OAP) and through social media (SM). ",
+    "Standard errors of (3a) clustered by respondent."
+  ),
+  file = "output/tables/table_C7_models_recruit_saxony.tex"
+)
+```
+
+## Differences Between the Channels (Note of Figure C.8)
+
+Pooled models with treatment interacted with the recruitment channel
+(reference: OAP). H3 with standard errors clustered by respondent.
+
+```{r models_recruit_interaction}
+data_saxony_ptv_recruit_main <- data_saxony_ptv_main %>%
+  left_join(data_saxony_main %>% select(ResponseId, recruit), by = "ResponseId")
+
+m_time_full_saxony_recruit_int <- lm(t_list_votes_exp_Page_Submit_log ~ treatment * recruit + baseline_speed + duration + lead_time,
+  data = data_saxony_time_main_nooutliers # already contains recruit
+)
+m_mae_full_saxony_recruit_int <- lm(list_votes_exp_mae ~ treatment * recruit + lead_time, data = data_saxony_main)
+m_pref_ptv_saxony_recruit_int <- lm(list_votes_exp_diff ~ treatment * preferred_party_ptv_dummy * recruit + lead_time + party,
+  data = data_saxony_ptv_recruit_main
+)
+
+# Interaction terms with the channel
+extract_recruit_terms <- function(ct, outcome) {
+  as_tibble(unclass(ct), rownames = "term") %>%
+    filter(str_detect(term, "^treatment.*:recruitSM$")) %>%
+    mutate(outcome = outcome)
+}
+bind_rows(
+  extract_recruit_terms(lmtest::coeftest(m_time_full_saxony_recruit_int), "H1: Response Time (log)"),
+  extract_recruit_terms(lmtest::coeftest(m_mae_full_saxony_recruit_int), "H2: MAE"),
+  extract_recruit_terms(
+    lmtest::coeftest(m_pref_ptv_saxony_recruit_int,
+      vcov = sandwich::vcovCL(m_pref_ptv_saxony_recruit_int, cluster = ~ResponseId)
+    ),
+    "H3: Forecast Error (PTV)"
+  )
+) %>%
+  select(outcome, term, estimate = Estimate, se = `Std. Error`, p = `Pr(>|t|)`) %>%
+  print_values(digits = 3) # helper
+```
+
+## Online Access Panel vs. Social Media (Figure C.8)
+
+H1 per channel, transformed to seconds as in Figure 2.
+Average case of the channel's sample, lead time of 20 days.
+
+```{r figure_C8, fig.width=10, fig.height=9}
+set.seed(20240901)
+m_time_full_avg_case_sim_saxony_oap <- simloglm(m_time_full_saxony_oap, scenario = list(
+  treatment = treatments_saxony,
+  baseline_speed = mean(data_saxony_time_oap_main$baseline_speed),
+  duration = mean(data_saxony_time_oap_main$duration),
+  lead_time = "20"
+))
+set.seed(20240901)
+m_time_full_avg_case_sim_saxony_sm <- simloglm(m_time_full_saxony_sm, scenario = list(
+  treatment = treatments_saxony,
+  baseline_speed = mean(data_saxony_time_sm_main$baseline_speed),
+  duration = mean(data_saxony_time_sm_main$duration),
+  lead_time = "20"
+))
+time_median_saxony_oap <- compute_time_effects(m_time_full_avg_case_sim_saxony_oap, "median", time_diffs_saxony) # helper
+time_median_saxony_sm <- compute_time_effects(m_time_full_avg_case_sim_saxony_sm, "median", time_diffs_saxony) # helper
+
+recruit_comparison_saxony <- list(
+  compute_sample_effects_time(
+    m_time_full_avg_case_sim_saxony_oap, treatments_saxony, # helper
+    time_median_saxony_oap$diff, "OAP", "H1: Response Time (s, median)"
+  ),
+  compute_sample_effects_time(
+    m_time_full_avg_case_sim_saxony_sm, treatments_saxony, # helper
+    time_median_saxony_sm$diff, "SM", "H1: Response Time (s, median)"
+  ),
+  compute_sample_effects(m_mae_full_saxony_oap, data_saxony_oap_main, "OAP", "H2: MAE"), # helper
+  compute_sample_effects(m_mae_full_saxony_sm, data_saxony_sm_main, "SM", "H2: MAE"), # helper
+  compute_sample_effects(m_pref_ptv_saxony_oap, data_saxony_ptv_oap_main, "OAP", "H3: Forecast Error (PTV)", # helper
+    by = "preferred_party_ptv_dummy", vcov = ~ResponseId
+  ),
+  compute_sample_effects(m_pref_ptv_saxony_sm, data_saxony_ptv_sm_main, "SM", "H3: Forecast Error (PTV)", # helper
+    by = "preferred_party_ptv_dummy", vcov = ~ResponseId
+  )
+)
+
+fd_recruit_saxony <- map_dfr(recruit_comparison_saxony, "diff") %>%
+  mutate(
+    outcome = factor(outcome, levels = sample_outcome_levels),
+    sample = factor(sample, levels = c("OAP", "SM"))
+  )
+
+plot_recruit_fd_saxony <- plot_sample_diff(fd_recruit_saxony,
+  colors = recruit_colors, # helper
+  shapes = recruit_shapes, fills = recruit_fills
+)
+plot_recruit_fd_saxony
+save_figure(plot_recruit_fd_saxony, "figure_C8_h123_recruit_fd_saxony",
+  election = "saxony", # helper
+  width = "full", aspect = 8 / 12
+)
+```
+
+Conditional medians and differences per channel (note of Figure C.8).
+
+```{r medians_recruit}
+map_dfr(recruit_comparison_saxony[1:2], "pred") %>%
+  print_values(c("sample", "treatment", est_cols), digits = 1) # helper
+
+print_values(fd_recruit_saxony, c("outcome", "diff", "sample", est_cols)) # helper
+```

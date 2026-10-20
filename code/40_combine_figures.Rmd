@@ -1,0 +1,361 @@
+---
+title: "Combined Figures: Federal Election and Saxony"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: false
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+source(rprojroot::find_rstudio_root_file("code/10_helpers.R"))
+
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  comment = "",
+  error = FALSE
+)
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+options(width = 120) # same line width of printed output in RStudio and Rscript
+
+dir.create(file.path(rprojroot::find_rstudio_root_file(), "output/figures"), recursive = TRUE, showWarnings = FALSE)
+```
+
+# What This Script Does
+
+The paper shows the federal election and Saxony side by side in one figure.
+The single-election figures are saved in `data/processed/figures/` (scripts 22, 23, 32, 33);
+this script uses patchwork to put them together and writes the combined figures to `output/figures/`.
+
+patchwork alone is not enough, for three reasons:
+
+1. **Headers.** Each plot gets a header with its election ("Germany", "Saxony").
+   The header should span the plot's text (from the y-axis title to the legend or last tick label),
+   but patchwork only knows where the panels are.
+   So the text around each panel is measured (*Measuring a Plot*) and the header's margins are set from it (*Headers*).
+2. **Fixed spacing.** Headers and the gaps between rows should be the same height in every figure, in cm,
+   while the plots share the rest of the height. This grid is built in *Combining*.
+3. **Size.** The figure is as wide as the text (16 cm) and as high as its subfigures plus headers and gaps,
+   so the subfigures keep their proportions.
+
+# Settings
+
+```{r settings}
+label_federal <- "Germany"
+label_saxony  <- "Saxony"
+
+header_fill   <- "grey88" # shade of the header above each plot
+header_size   <- 17       # pt on the canvas, printed at 8.5 pt like the axis titles (figure_scale = 2)
+header_height <- 0.45     # printed cm
+header_space  <- 0.15     # printed cm between a header and its plot
+row_gap       <- 0.35     # printed cm between two rows of plots
+column_gap    <- 0.04     # space between two columns of plots, relative to the width of one plot panel
+figure_width  <- 16       # printed cm, the text width
+```
+
+# Figures
+
+One row per combined figure.
+`panels`: the subfigures, federal first, then Saxony.
+`layout`: rows x columns, filled row by row:
+
+- `1x2`: federal left, Saxony right
+- `2x2`: federal row on top, Saxon row below
+- `2x1`: federal on top, Saxony below
+
+```{r figures}
+figures <- tribble(
+  ~file,                          ~layout,
+  ~panels,
+  "figure_1_desc_voteshare_dist", "1x2",
+  c("figure_1a_desc_voteshare_dist_federal", "figure_1b_desc_voteshare_dist_saxony"),
+  "figure_2_h1_median", "2x2",
+  c("figure_2a_h1_median_federal", "figure_2b_h1_median_fd_federal", "figure_2c_h1_median_saxony", "figure_2d_h1_median_fd_saxony"),
+  "figure_3_h2_mae", "2x2",
+  c("figure_3a_h2_mae_federal", "figure_3b_h2_mae_fd_federal", "figure_3c_h2_mae_saxony", "figure_3d_h2_mae_fd_saxony"),
+  "figure_4_h3_wt_byparty_fd", "1x2",
+  c("figure_4a_h3_wt_byparty_fd_federal", "figure_4b_h3_wt_byparty_fd_saxony"),
+  "figure_5_h3_ptv", "2x2",
+  c("figure_5a_h3_ptv_federal", "figure_5b_h3_ptv_fd_federal", "figure_5c_h3_ptv_saxony", "figure_5d_h3_ptv_fd_saxony"),
+  "figure_B1_desc_time_dist", "1x2",
+  c("figure_B1a_desc_time_dist_federal", "figure_B1b_desc_time_dist_saxony"),
+  "figure_B2_desc_time_hist", "2x2",
+  c("figure_B2a_desc_time_hist_federal", "figure_B2b_desc_time_loghist_federal", "figure_B2c_desc_time_hist_saxony", "figure_B2d_desc_time_loghist_saxony"),
+  "figure_B7_h3_wt_byparty", "2x2",
+  c("figure_B7a_h3_wt_byparty_federal", "figure_4a_h3_wt_byparty_fd_federal", "figure_B7c_h3_wt_byparty_saxony", "figure_4b_h3_wt_byparty_fd_saxony"),
+  "figure_C1_h1_mean", "2x2",
+  c("figure_C1a_h1_mean_federal", "figure_C1b_h1_mean_fd_federal", "figure_C1c_h1_mean_saxony", "figure_C1d_h1_mean_fd_saxony"),
+  "figure_C2_h2_rmse", "2x2",
+  c("figure_C2a_h2_rmse_federal", "figure_C2b_h2_rmse_fd_federal", "figure_C2c_h2_rmse_saxony", "figure_C2d_h2_rmse_fd_saxony"),
+  "figure_C3_h3_ptv_ties", "2x2",
+  c("figure_C3a_h3_ptv_ties_federal", "figure_C3b_h3_ptv_ties_fd_federal", "figure_C3c_h3_ptv_ties_saxony", "figure_C3d_h3_ptv_ties_fd_saxony"),
+  "figure_C4_h3_vi", "2x2",
+  c("figure_C4a_h3_vi_federal", "figure_C4b_h3_vi_fd_federal", "figure_C4c_h3_vi_saxony", "figure_C4d_h3_vi_fd_saxony"),
+  "figure_C5_h3_pid", "2x2",
+  c("figure_C5a_h3_pid_federal", "figure_C5b_h3_pid_fd_federal", "figure_C5c_h3_pid_saxony", "figure_C5d_h3_pid_fd_saxony"),
+  "figure_C6_h3_ptvscore", "2x2",
+  c("figure_C6a_h3_ptvscore_federal", "figure_C6b_h3_ptvscore_fd_federal", "figure_C6c_h3_ptvscore_saxony", "figure_C6d_h3_ptvscore_fd_saxony"),
+  "figure_C7_h123_noexcl_fd", "2x1",
+  c("figure_C7a_h123_noexcl_fd_federal", "figure_C7b_h123_noexcl_fd_saxony"),
+  "figure_C9_h2_mae_educ", "2x2",
+  c("figure_C9a_h2_mae_educ_federal", "figure_C9b_h2_mae_educ_fd_federal", "figure_C9c_h2_mae_educ_saxony", "figure_C9d_h2_mae_educ_fd_saxony"),
+  "figure_C10_h2_mae_polint", "2x2",
+  c("figure_C10a_h2_mae_polint_federal", "figure_C10b_h2_mae_polint_fd_federal", "figure_C10c_h2_mae_polint_saxony", "figure_C10d_h2_mae_polint_fd_saxony"),
+  "figure_C11_h3_ptv_educ", "2x2",
+  c("figure_C11a_h3_ptv_educ_federal", "figure_C11b_h3_ptv_educ_fd_federal", "figure_C11c_h3_ptv_educ_saxony", "figure_C11d_h3_ptv_educ_fd_saxony"),
+  "figure_C12_h3_ptv_polint", "2x2",
+  c("figure_C12a_h3_ptv_polint_federal", "figure_C12b_h3_ptv_polint_fd_federal", "figure_C12c_h3_ptv_polint_saxony", "figure_C12d_h3_ptv_polint_fd_saxony")
+)
+
+```
+
+# Building Blocks
+
+## Measuring a Plot
+
+The header above a plot "Germany" or "Saxony" should span the plot's text, not just its panel.
+patchwork only knows where the panels are, so the text around each panel is measured here.
+`ggplotGrob()` turns a plot into a table ("gtable") of columns, e.g.
+`| margin | y-axis title | y-axis labels | PANEL | legend | margin |`;
+the panel column stretches, all others have a fixed width.
+All widths are in pt on the canvas (twice the printed size, `figure_scale = 2`).
+
+The four functions build on each other:
+
+**`width_pt(grob)`** converts the width of one drawn element ("grob") to pt. Used by all the others.
+
+**`part_width(g, part)`** returns the width of one named cell of the table `g`.
+
+- Input: `g = ggplotGrob(p)` and the cell's name, e.g. `"xlab-b"` (x-axis title), `"ylab-l"` (y-axis title), `"guide-box-bottom"` (legend below the panel).
+- Returns 0 if the plot has no such cell.
+- Axis titles stretch with the panel, so their cell reports width 0; the function measures the title's text instead.
+  An empty title (`""`) has no text and counts 0.
+
+**`last_tick(p)`** describes the last tick label of the x-axis, which can stick out past the right edge of the panel.
+
+- Input: the ggplot `p` (not the table), because the tick positions come from `ggplot_build()`.
+- Returns a one-row tibble: `tick_pos`, the tick's position on the panel (0 = left edge, 1 = right edge),
+  and `tick_half`, half the width of its label (the label is centred on the tick).
+- The label is redrawn with the font size and family of the plot's `axis.text.x.bottom` theme element to measure it.
+- Without ticks it returns `tick_pos = 1, tick_half = 0`.
+
+**`measure_plot(p)`** combines these into one row of a tibble per plot:
+
+| column | what it measures |
+|---|---|
+| `left`, `right` | all columns left / right of the panel, margins included |
+| `content_left` | the text left of the panel: from the y-axis title (or, without one, the y-axis labels) up to the panel |
+| `content_right` | everything right of the panel except the outer margin (e.g. a legend on the right) |
+| `xlab`, `legend` | width of the x-axis title and of a legend below the panel; both are centred on the panel and stick out by half of what they exceed it |
+| `tick_pos`, `tick_half` | from `last_tick()` |
+
+A patchwork (the subfigures of Figure C.7 are already combined plots) has no single table, so it is not measured and gets `left = NA`.
+
+```{r measure}
+# Width of a grob in pt
+width_pt <- function(grob) grid::convertWidth(grid::grobWidth(grob), "pt", valueOnly = TRUE)
+
+# Width in pt of one part of a plot table (g = ggplotGrob(), part e.g. "xlab-b"), 0 if it is missing or empty
+part_width <- function(g, part) {
+  # g$layout lists the name of every cell, g$grobs holds what is drawn in it (same order)
+  grob <- g$grobs[g$layout$name == part]
+  if (length(grob) == 0) return(0) # the plot has no such part
+  grob <- grob[[1]]
+  # an axis title reports width 0: take the width of its text instead (none for an empty title "")
+  if (inherits(grob, "titleGrob")) {
+    texts <- keep(grob$children, ~ any(nzchar(.x$label)))
+    return(max(0, map_dbl(texts, width_pt)))
+  }
+  width_pt(grob)
+}
+
+# Last tick label of the bottom axis: its position on the panel (0 = left, 1 = right) and half its width in pt
+last_tick <- function(p) {
+  # the x-axis as drawn on the (first) panel, after ggplot has computed the breaks
+  x <- ggplot_build(p)$layout$panel_params[[1]]$x
+  # all ticks with their labels; breaks outside the axis range are NA and dropped
+  ticks <- tibble(pos = x$break_positions(), label = x$get_labels()) %>% drop_na()
+  if (nrow(ticks) == 0) return(tibble(tick_pos = 1, tick_half = 0))
+  last <- slice_max(ticks, pos, n = 1, with_ties = FALSE) # the rightmost tick
+  # the font of the tick labels: a complete theme (e.g. theme_bw()) is used as is,
+  # theme() tweaks are added to the default theme first
+  theme <- if (isTRUE(attr(p$theme, "complete"))) p$theme else theme_get() + p$theme
+  text <- calc_element("axis.text.x.bottom", theme)
+  # draw the label again in that font to measure it
+  label <- grid::textGrob(last$label, gp = grid::gpar(fontsize = text$size, fontfamily = text$family))
+  tibble(tick_pos = last$pos, tick_half = width_pt(label) / 2)
+}
+
+# Widths of a plot around its panel, in pt (left = NA for a patchwork such as Figure C.7):
+#   left, right:      everything left / right of the panel, including the plot margins
+#   content_left:     the text left of the panel: y-axis title (if there is one) and y-axis labels
+#   content_right:    anything right of the panel except the margin (e.g. a legend on the right)
+#   xlab, legend:     x-axis title and legend below the panel, both centred on the panel
+#   tick_pos, tick_half: last tick label, see last_tick()
+measure_plot <- function(p) {
+  if (inherits(p, "patchwork")) return(tibble(left = NA_real_))
+  g <- ggplotGrob(p) # the plot as a table of columns
+  w <- grid::convertWidth(g$widths, "pt", valueOnly = TRUE) # width of each column; the panel column ("null") counts 0
+  column <- seq_along(w) # column numbers, to select columns left / right of the panel
+  # the panel's cells (several with facets), each with its first (l) and last (r) column
+  panel <- g$layout %>% filter(str_detect(name, "^panel"))
+  panel_first <- min(panel$l) # first and last column of the panel
+  panel_last  <- max(panel$r)
+  # the text left of the panel starts with the y-axis title if it has text, else with the y-axis labels
+  start <- if (part_width(g, "ylab-l") > 0) {
+    g$layout %>% filter(name == "ylab-l") %>% pull(l) %>% first()
+  } else {
+    g$layout %>% filter(str_detect(name, "^axis-l")) %>% pull(l) %>% min()
+  }
+  # add up the widths of the columns on each side of the panel
+  tibble(
+    left          = sum(w[column < panel_first]),
+    right         = sum(w[column > panel_last]),
+    content_left  = sum(w[column >= start & column < panel_first]),
+    content_right = sum(w[column > panel_last & column < length(w)]), # the last column is the margin
+    xlab          = part_width(g, "xlab-b"),
+    legend        = part_width(g, "guide-box-bottom"),
+    last_tick(p)
+  )
+}
+```
+
+## Headers
+
+```{r headers}
+# Header with the election name: shaded box with plain text like the axis titles,
+# or only the name in bold (shaded = FALSE)
+# margin_left, margin_right: space in pt between the edges of the plot's column and the header
+make_header <- function(label, margin_left = 0, margin_right = 0, shaded = TRUE) {
+  # an empty plot from 0 to 1 in both directions, filled by the box with the label in its centre
+  header <- ggplot() +
+    annotate("rect", xmin = 0, xmax = 1, ymin = 0, ymax = 1, fill = if (shaded) header_fill else NA) +
+    annotate("text", x = 0.5, y = 0.5, label = label, size = header_size / .pt,
+             fontface = if (shaded) "plain" else "bold") +
+    scale_x_continuous(limits = c(0, 1), expand = c(0, 0)) +
+    scale_y_continuous(limits = c(0, 1), expand = c(0, 0)) +
+    theme_void() +
+    theme(plot.margin = margin(0, margin_right, 0, margin_left))
+  wrap_elements(full = header) # spans the whole column, not only the panel
+}
+
+# Headers above all plots of a figure, each covering its plot's text
+# patchwork aligns the panels: plots in the same column share the widths left and right of the panel
+make_headers <- function(plots, labels, columns) {
+  # one row per plot: its widths, election name and column in the figure
+  sizes <- map(plots, measure_plot) %>%
+    list_rbind() %>%
+    mutate(label = labels, column = columns)
+
+  # Figure C.7: its parts have boxes of their own, so only the name in bold
+  if (anyNA(sizes$left)) return(map(labels, make_header, shaded = FALSE))
+
+  # after aligning, the space left / right of the panel in a column is that of its widest plot
+  sizes <- sizes %>%
+    group_by(column) %>%
+    mutate(column_left = max(left), column_right = max(right)) %>%
+    ungroup()
+
+  # Width of one panel in pt: the canvas without the widths around the panels and the gaps between the columns
+  # canvas = n_columns * panel + (n_columns - 1) * column_gap * panel + around, solved for panel
+  canvas    <- figure_width * figure_scale / 2.54 * 72 # printed cm -> pt on the canvas
+  around    <- sizes %>% distinct(column, column_left, column_right) %>% summarize(sum(column_left + column_right)) %>% pull()
+  n_columns <- n_distinct(columns)
+  panel     <- (canvas - around) / (n_columns + (n_columns - 1) * column_gap)
+
+  sizes %>%
+    mutate(
+      # how far the text sticks out right of the panel, the largest of:
+      #   content_right: a legend or other text right of the panel
+      #   x-axis title / legend below: half of what they are wider than the panel
+      #   last tick label: half its width minus the distance from its tick to the panel's right edge
+      overhang = pmax(0, content_right, (xlab - panel) / 2, (legend - panel) / 2, tick_half - (1 - tick_pos) * panel),
+      # header margins: from the column's edge to where the text starts / ends
+      margin_left  = column_left - content_left,
+      margin_right = pmax(0, column_right - overhang)
+    ) %>%
+    select(label, margin_left, margin_right) %>%
+    pmap(make_header) # one header per plot, in the order of the plots
+}
+```
+
+## Combining
+
+Each row of plots takes four rows of the grid: header, space, plots, gap (no gap after the last row).
+Columns of plots are separated by a narrow gap column.
+Headers, spaces and gaps have fixed heights, the rows of plots share the rest in proportion to the subfigures' heights.
+
+```{r combine_functions}
+cm    <- function(x) grid::unit(x * figure_scale, "cm") # fixed height, printed cm on the 2x canvas
+share <- function(x) grid::unit(x, "null")              # share of the remaining height
+
+# Combined figure of the saved subfigures (panels): plot and printed height in cm
+combine_figure <- function(layout, panels) {
+  n_columns <- as.integer(str_sub(layout, 3, 3)) # "2x2" -> 2
+
+  # One row per subfigure: the saved plot, its height, election name and place in the figure
+  # (filled row by row: with 2 columns, subfigures 1, 2 form row 1 and 3, 4 row 2)
+  cells <- tibble(panel = panels) %>%
+    mutate(
+      saved  = map(file.path("data", "processed", "figures", paste0(panel, ".rds")), readRDS),
+      plot   = map(saved, "plot"),
+      height = map_dbl(saved, ~ .x$width * .x$aspect), # printed height of the subfigure in cm
+      label  = if_else(str_ends(panel, "_federal"), label_federal, label_saxony),
+      row    = (row_number() - 1) %/% n_columns + 1,
+      column = (row_number() - 1) %% n_columns + 1
+    ) %>%
+    group_by(row) %>%
+    mutate(row_height = max(height)) %>% # a row is as high as its highest subfigure
+    ungroup()
+
+  # text widths for the headers are measured with the device of the PDF
+  grDevices::cairo_pdf(tempfile())
+  headers <- make_headers(cells$plot, cells$label, cells$column)
+  grDevices::dev.off()
+
+  # Position in the grid: headers and plots of row r in grid rows 4r - 3 and 4r - 1, column c in grid column 2c - 1
+  grid_row    <- 4 * (cells$row - 1)
+  grid_column <- 2 * cells$column - 1
+  design <- c(area(t = grid_row + 1, l = grid_column),  # headers
+              area(t = grid_row + 3, l = grid_column))  # plots
+
+  # Heights of the grid rows: header, space, plots, gap for each row of plots
+  row_heights <- cells %>% distinct(row, row_height) %>% pull(row_height)
+  heights <- map(row_heights, ~ grid::unit.c(cm(header_height), cm(header_space), share(.x), cm(row_gap))) %>%
+    do.call(grid::unit.c, .)
+  heights <- heights[-length(heights)] # no gap after the last row
+  # Widths of the grid columns: plot, gap, plot, ... (no gap after the last column)
+  widths  <- head(rep(c(1, column_gap), n_columns), -1)
+
+  list(
+    # headers first, then plots, matching the order of the areas in design
+    plot   = wrap_plots(c(headers, cells$plot), design = design, widths = widths, heights = heights),
+    # printed height in cm: the subfigures plus headers, spaces and gaps
+    height = sum(row_heights + header_height + header_space) + (length(row_heights) - 1) * row_gap
+  )
+}
+
+# Writes the PDF (16 cm wide, on a 2x canvas like all figures)
+# set.seed(): the jittered points of Figure B.1 are drawn anew each time the plot is drawn
+save_combined <- function(combined, file) {
+  set.seed(2026)
+  ggsave(file.path("output", "figures", paste0(file, ".pdf")), combined$plot,
+         device = grDevices::cairo_pdf, width = figure_width, height = combined$height, units = "cm",
+         scale = figure_scale)
+}
+```
+
+# Combined Figures
+
+```{r combine}
+# For each figure (row of figures): build it and save the PDF to output/figures/
+# pwalk() passes the columns to the function by name
+figures %>%
+  pwalk(function(file, layout, panels) {
+    save_combined(combine_figure(layout, panels), file)
+  })
+```

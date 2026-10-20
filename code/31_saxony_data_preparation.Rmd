@@ -1,0 +1,352 @@
+---
+title: "Saxon State Election 2024: Data Preparation"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: false
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+source(rprojroot::find_rstudio_root_file("code/10_helpers.R"))
+
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, comment = "")
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+options(width = 120) 
+```
+
+This script prepares the data of the survey experiment before the 2024 Saxon state election.
+It follows `21_federal_data_preparation.Rmd` and writes three files to `data/processed/`, which `32_saxony_descriptives.Rmd` reads:
+
+- `results_official_saxony.rdata`: the official list-vote result, the benchmark of all accuracy measures,
+- `data_saxony.rdata`: one row per respondent (first participation only) with all variables of the analyses,
+- `data_saxony_long.rdata`: one row per respondent and party with the expected vote share and the forecast error.
+
+
+# Official Election Result
+
+List-vote shares of the 2024 Saxon state election (Table 1), read from the final result of the Statistisches Landesamt Sachsen (`data/input/results/`).
+The file has one row per area. The state-level row (`Ebene == "SN"`) is used, and the list-vote columns end in `_2`.
+The eight parties asked about in the survey keep their name, all other parties form *Others*.
+Shares are in % of the valid list votes and add up to 100.
+
+```{r results_official_saxony}
+votes_saxony <- read_excel("data/input/results/statistik-sachsen_LW24_endgErgebniss.xlsx",
+  sheet = "LW24_endgErgebnisse_SN&WK"
+) %>%
+  filter(Ebene == "SN") %>% # state-level row
+  select(ends_with("_2")) %>% # "_2" = list votes
+  mutate(across(everything(), as.numeric)) %>%
+  pivot_longer(everything(), names_to = "party_raw", values_to = "votes")
+
+valid_votes_saxony <- votes_saxony %>%
+  filter(str_detect(party_raw, "^g.*ltige_2$")) %>% # "gültige_2" = valid list votes
+  pull(votes)
+
+results_official_saxony <- votes_saxony %>%
+  filter(!str_detect(party_raw, "ltige_2$")) %>% # without valid and invalid votes
+  mutate(party = case_when( # parties in the survey, all others combined
+    party_raw == "CDU_2" ~ "CDU",
+    party_raw == "AfD_2" ~ "AfD",
+    party_raw == "DIE LINKE_2" ~ "Left",
+    str_detect(party_raw, "^GR") ~ "Greens",
+    party_raw == "SPD_2" ~ "SPD",
+    party_raw == "FDP_2" ~ "FDP",
+    str_detect(party_raw, "^FREIE W") ~ "Free Voters",
+    party_raw == "BSW_2" ~ "BSW",
+    TRUE ~ "Others"
+  )) %>%
+  group_by(party) %>%
+  summarize(result_official = sum(votes) / valid_votes_saxony * 100, .groups = "drop") # share of valid list votes in %
+rm(votes_saxony, valid_votes_saxony)
+
+results_official_saxony
+
+save(results_official_saxony, file = "data/processed/results_official_saxony.rdata")
+```
+
+
+# Survey Data
+
+## Sample
+
+```{r load}
+load("data/input/survey/survey_saxony.rdata")
+
+data_saxony <- survey_saxony %>%
+  mutate(
+    treatment = factor(
+      group,
+      levels = c("control", "treatment"),
+      labels = c("Control", "Treatment (500)")
+    )
+  ) %>%
+  select(-group) %>%
+  mutate(pid = case_when(
+    is.na(pid) ~ NA_character_,
+    pid == "CDU" ~ "CDU",
+    pid == "AfD" ~ "AfD",
+    pid == "DIE LINKE" ~ "Left",
+    pid == "GRÜNE" ~ "Greens",
+    pid == "SPD" ~ "SPD",
+    pid == "FDP" ~ "FDP",
+    pid == "BSW" ~ "BSW",
+    pid == "Keine Partei" ~ "none",
+    TRUE ~ "other" # "Andere Partei"
+  )) %>%
+  # Free Voters identifiers from the open answer
+  mutate(pid = if_else(pid == "other" & !is.na(pid_other) & pid_other == "FREIE WÄHLER", "Free Voters", pid))
+
+data_saxony %>% count(treatment)
+data_saxony %>% count(source)
+data_saxony %>% count(pid)
+rm(survey_saxony)
+```
+
+## Variables
+
+Recodes of the variables used in the models:
+
+- `lead_time`: days between the interview and the election day (1 September 2024), used as survey date fixed effects,
+- `turnout_int_dummy`: intends to vote (certain to vote or already voted by mail),
+- `recruit`: recruitment channel, online access panel (OAP) or social media (SM),
+- `zs_int`: vote intention with the party names of the long data (other parties and invalid votes are missing),
+
+The cross table checks the turnout dummy against the original answers.
+
+```{r recodes}
+data_saxony <- data_saxony %>%
+  mutate(
+    # Days before the election (survey date fixed effects), computed in 01_create_replication_data.R
+    lead_time = as_factor(lead_time),
+    turnout_int = factor(turnout_int, levels = rev(levels(turnout_int))),
+    # Turnout intention: certain to vote or already voted by mail
+    turnout_int_dummy = case_when(
+      turnout_int %in% c("bestimmt zur Wahl gehen", "ich habe bereits Briefwahl gemacht") ~ "ja",
+      TRUE ~ "nein"
+    ),
+    turnout_int_dummy = factor(turnout_int_dummy, levels = c("nein", "ja")),
+    # Recruitment channel: online access panel or social media
+    recruit = if_else(str_detect(source, "bilendi"), "OAP", "SM"),
+    # Vote intention with the party names of the long data
+    # Other parties and invalid votes are NA
+    zs_int = case_when(
+      list_vote_int_major %in% c("Eine andere Partei", "Ich werden ungültig wählen.") ~ NA_character_,
+      list_vote_int_major == "GRÜNE" ~ "Greens",
+      list_vote_int_major == "DIE LINKE" ~ "Left",
+      list_vote_int_major == "FREIE WÄHLER" ~ "Free Voters",
+      list_vote_int_major %in% c("CDU", "CSU") ~ "CDU",
+      TRUE ~ as.character(list_vote_int_major)
+    )
+  ) %>%
+  set_variable_labels(
+    lead_time         = "Number of days before the election the interview took place",
+    turnout_int_dummy = "Turnout intention dummy (certain to vote or mail = yes)",
+    recruit           = "Recruitment: OAP = online access panel, SM = social media"
+  )
+
+data_saxony %>%
+  count(turnout_int, turnout_int_dummy) %>%
+  pivot_wider(names_from = turnout_int_dummy, values_from = n, values_fill = 0)
+data_saxony %>% count(recruit)
+```
+
+The sample composition table (Table B.4) compares the sample with the electorate.
+For this, age, vote intention, gender, education and turnout intention are grouped into the categories of the official statistics, with English labels.
+Respondents who answered "diverse" are counted as men (Men*), as in the representative electoral statistics.
+The tables show the distribution of each recoded variable.
+
+```{r recodes_sample_composition}
+data_saxony <- data_saxony %>%
+  mutate(
+    age_group = case_when(
+      age < 30 ~ "18-29",
+      age >= 30 & age < 40 ~ "30-39",
+      age >= 40 & age < 50 ~ "40-49",
+      age >= 50 & age < 60 ~ "50-59",
+      age >= 60 ~ "60+",
+      TRUE ~ NA_character_
+    ),
+    list_vote_int_eng = case_when(
+      list_vote_int_major %in% c("Eine andere Partei", "Ich werden ungültig wählen.") ~ "Other",
+      list_vote_int_major == "GRÜNE" ~ "Greens",
+      list_vote_int_major == "DIE LINKE" ~ "Left",
+      list_vote_int_major == "FREIE WÄHLER" ~ "Free Voters",
+      TRUE ~ list_vote_int_major
+    ),
+    list_vote_int_eng = factor(list_vote_int_eng,
+      levels = c("AfD", "Greens", "BSW", "CDU", "FDP", "Left", "SPD", "Free Voters", "Other")
+    ),
+    gender_eng = case_when(
+      gender == "Weiblich" ~ "Women",
+      gender == "Männlich" ~ "Men",
+      gender == "Divers" ~ "Diverse",
+      TRUE ~ gender
+    ),
+    # Diverse counted as men (Men*)
+    gender_eng2 = if_else(gender_eng == "Diverse", "Men", gender_eng),
+    education_eng = case_when(
+      education %in% c(
+        "Schule beendet ohne Abschluss",
+        "Hauptschulabschluss, Volksschulabschluss, Abschluss der polytechnischen Oberschule 8. oder 9. Klasse"
+      ) ~ "Low",
+      education %in% c(
+        "Realschulabschluss, Mittlere Reife, Fachschulreife oder Abschluss der polytechnischen Oberschule 10. Klasse"
+      ) ~ "Medium",
+      education == "Bin noch Schüler/in" ~ "Still in School",
+      education == "Anderen Schulabschluss, und zwar:" ~ NA,
+      education %in% c(
+        "Fachhochschulreife (Abschluss einer Fachoberschule etc.)",
+        "Abitur bzw. erweiterte Oberschule mit Abschluss 12. Klasse (Hochschulreife)"
+      ) ~ "High",
+      TRUE ~ education
+    ),
+    education_eng = factor(education_eng,
+      levels = c("Low", "Medium", "High", "Still in School")
+    ),
+    turnout_int_eng = case_when(
+      turnout_int_dummy == "nein" ~ "No",
+      turnout_int_dummy == "ja" ~ "Yes",
+      TRUE ~ NA_character_
+    )
+  )
+
+data_saxony %>% count(age_group)
+data_saxony %>% count(gender_eng2)
+data_saxony %>% count(education_eng)
+data_saxony %>% count(turnout_int_eng)
+data_saxony %>% count(list_vote_int_eng)
+```
+
+## Response Times
+
+The survey file contains the same response times as the federal data (in seconds):
+
+- the time spent on the page of the expectation item (`t_list_votes_exp_Page_Submit`), the dependent variable of H1 (logged),
+- the times of five filler items (birth year, vote intention, eligibility, turnout intention, political interest), from which 32 computes each respondent's baseline speed.
+
+The output summarizes the response time of the expectation item in seconds.
+
+```{r response_times}
+time_vars_saxony <- c("t_list_votes_exp_Page_Submit", baseline_speed_vars)
+
+data_saxony <- data_saxony %>%
+  # Logged response time (H1)
+  mutate(t_list_votes_exp_Page_Submit_log = log(t_list_votes_exp_Page_Submit))
+
+data_saxony %>%
+  summarize(
+    n_missing = sum(is.na(t_list_votes_exp_Page_Submit)),
+    min = min(t_list_votes_exp_Page_Submit, na.rm = TRUE),
+    median = median(t_list_votes_exp_Page_Submit, na.rm = TRUE),
+    mean = mean(t_list_votes_exp_Page_Submit, na.rm = TRUE),
+    max = max(t_list_votes_exp_Page_Submit, na.rm = TRUE)
+  ) %>%
+  print_values(digits = 1) # helper
+```
+
+## Vote Share Expectations (Long Data)
+
+Respondents gave their expected vote share for eight parties and *Others* on sliders.
+The wide data are reshaped to one row per respondent and party, and the official result of the party is joined.
+The forecast error is the expected minus the actual vote share (`list_votes_exp_diff`, in percentage points).
+Positive values mean the party was overestimated.
+The H3 models use these long data.
+The output shows the rows of one respondent.
+
+```{r long}
+list_votes_exp_vars_saxony <- c(
+  "CDU"         = "list_votes_exp_cdu",
+  "AfD"         = "list_votes_exp_afd",
+  "Left"        = "list_votes_exp_linke",
+  "Greens"      = "list_votes_exp_gruene",
+  "SPD"         = "list_votes_exp_spd",
+  "FDP"         = "list_votes_exp_fdp",
+  "BSW"         = "list_votes_exp_bsw",
+  "Free Voters" = "list_votes_exp_fw",
+  "Others"      = "list_votes_exp_other"
+)
+
+data_saxony_long <- data_saxony %>%
+  select(
+    ResponseId, id_unique, treatment, lead_time,
+    age, gender, education,
+    list_vote_int_major, starts_with("ptv_"), pid,
+    all_of(list_votes_exp_vars_saxony)
+  ) %>%
+  pivot_longer(
+    cols = all_of(names(list_votes_exp_vars_saxony)),
+    names_to = "party",
+    values_to = "list_votes_exp"
+  ) %>%
+  left_join(
+    results_official_saxony %>% rename(list_votes_result = result_official),
+    by = "party"
+  ) %>%
+  mutate(list_votes_exp_diff = list_votes_exp - list_votes_result) %>%
+  relocate(party, list_votes_exp, list_votes_result, list_votes_exp_diff, .after = id_unique)
+
+data_saxony_long %>%
+  filter(ResponseId == first(ResponseId)) %>%
+  select(party, list_votes_exp, list_votes_result, list_votes_exp_diff) %>%
+  print_values() # helper
+```
+
+## Individual Accuracy (MAE, RMSE)
+
+The accuracy of each respondent's expectations, the dependent variable of H2:
+the mean absolute error (MAE) and, as a robustness check, the root mean squared error (RMSE) of the forecast errors over the nine categories (eight parties and *Others*).
+Lower values mean more accurate expectations.
+
+```{r accuracy}
+accuracy_saxony <- data_saxony_long %>%
+  group_by(ResponseId) %>%
+  summarize(
+    list_votes_exp_mae  = mean(abs(list_votes_exp_diff)),
+    list_votes_exp_rmse = sqrt(mean(list_votes_exp_diff^2)),
+    .groups = "drop"
+  )
+
+data_saxony <- data_saxony %>%
+  left_join(accuracy_saxony, by = "ResponseId") %>%
+  set_variable_labels(
+    list_votes_exp_mae  = "MAE List Vote Expectations",
+    list_votes_exp_rmse = "RMSE List Vote Expectations"
+  )
+
+data_saxony %>%
+  summarize(across(c(list_votes_exp_mae, list_votes_exp_rmse), list(mean = mean, sd = sd))) %>%
+  print_values() # helper
+
+rm(accuracy_saxony)
+```
+
+
+# Save
+
+Only the variables used later are kept.
+
+```{r save}
+data_saxony <- data_saxony %>%
+  select(
+    # IDs and interview
+    ResponseId, id_unique, source, recruit, interview_date, duration, lead_time,
+    # Experiment
+    treatment, pledge_expectations,
+    # Demographics
+    age, age_group, gender, gender_eng, gender_eng2,
+    education, education_eng,
+    # Political variables
+    pol_interest, turnout_int, turnout_int_dummy, turnout_int_eng,
+    list_vote_int_major, list_vote_int_eng, zs_int, starts_with("ptv_"), pid,
+    # Vote share expectations and accuracy
+    all_of(unname(list_votes_exp_vars_saxony)),
+    list_votes_exp_mae, list_votes_exp_rmse,
+    # Response times
+    all_of(time_vars_saxony), t_list_votes_exp_Page_Submit_log
+  )
+
+save(data_saxony, file = "data/processed/data_saxony.rdata")
+save(data_saxony_long, file = "data/processed/data_saxony_long.rdata")
+```

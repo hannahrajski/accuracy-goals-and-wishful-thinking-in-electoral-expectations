@@ -1,0 +1,15 @@
+# R / RStudio
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+
+# Raw survey exports (identifying information, not public), see code/01_create_replication_data.R
+data/confidential/
+
+# Data written by the scripts
+data/processed/*
+!data/processed/.gitkeep
+
+# Intermediate files of knitting (the HTML reports in code/ are part of the replication files)
+code/*_files/

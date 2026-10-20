@@ -1,0 +1,372 @@
+---
+title: "Federal Election 2025: Data Preparation"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: false
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+source(rprojroot::find_rstudio_root_file("code/10_helpers.R"))
+
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, comment = "")
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+options(width = 120) # same line width of printed output in RStudio and Rscript
+```
+
+This script prepares the data of the survey experiment before the 2025 federal election.
+It writes three files to `data/processed/`, which `22_federal_descriptives.Rmd` reads:
+
+- `results_official_federal.rdata`: the official second-vote result, the benchmark of all accuracy measures,
+- `data_federal.rdata`: one row per respondent (first participation only) with all variables of the analyses,
+- `data_federal_long.rdata`: one row per respondent and party with the expected vote share and the forecast error.
+
+# Official Election Result
+
+Second-vote shares of the 2025 federal election.
+The numbers of second votes of the parties asked about in the survey and the number of valid second votes
+are copied from the final result of the Federal Returning Officer
+(<https://www.bundeswahlleiterin.de/bundestagswahlen/2025/ergebnisse/bund-99.html>)
+to `data/input/results/btw25_second_votes_federal.csv`.
+Shares are in % of the valid second votes.
+
+```{r results_official_federal}
+votes_federal <- read_csv("data/input/results/btw25_second_votes_federal.csv", show_col_types = FALSE)
+
+valid_second_votes_federal <- votes_federal %>%
+  filter(party == "Valid second votes") %>%
+  pull(votes)
+
+results_official_federal <- votes_federal %>%
+  filter(party != "Valid second votes") %>%
+  mutate(party = if_else(party %in% c("CDU", "CSU"), "CDU/CSU", party)) %>% # CDU and CSU combined
+  group_by(party) %>%
+  summarize(votes = sum(votes), .groups = "drop") %>%
+  mutate(
+    party = factor(party, levels = c("CDU/CSU", "AfD", "SPD", "Greens", "Left", "BSW", "FDP")),
+    result_official = votes / valid_second_votes_federal * 100 # share of valid second votes in %
+  ) %>%
+  arrange(party) %>%
+  mutate(party = as.character(party)) %>%
+  select(-votes) %>%
+  add_row(party = "Others", result_official = 100 - sum(.$result_official))
+rm(votes_federal)
+
+results_official_federal
+
+save(results_official_federal, file = "data/processed/results_official_federal.rdata")
+```
+
+
+# Survey Data
+
+## Sample
+
+The analyses use each respondent's first participation in one of the two waves of the online access panel (`bilendi_w1`, `bilendi_w2`).
+Respondents could take part more than once. Later participations are dropped, so no respondent saw the experiment twice.
+The survey file contains only these interviews (one row per respondent):
+the sample is selected in `01_create_replication_data.R` from the raw survey data, which are not public.
+
+Party identification was asked only in the re-interviews of wave 2.
+`01_create_replication_data.R` takes it from a respondent's second participation and joins it to the first participation
+(`pid_date`: date of the re-interview, missing for respondents without a re-interview).
+The output shows the number and field period of these re-interviews, then the size of the sample by wave.
+
+```{r load}
+load("data/input/survey/survey_federal.rdata")
+
+# Field period of the re-interviews
+survey_federal %>%
+  filter(!is.na(pid_date)) %>%
+  summarize(n = n(), first_day = min(pid_date), last_day = max(pid_date))
+
+data_federal <- survey_federal %>%
+  mutate(
+    pid = case_when(
+      is.na(pid) ~ NA_character_, # no re-interview or no answer
+      pid == "AfD" ~ "AfD",
+      pid == "BSW" ~ "BSW",
+      pid == "CDU/CSU" ~ "CDU/CSU",
+      pid == "FDP" ~ "FDP",
+      pid == "GRÜNE" ~ "Greens",
+      pid == "DIE LINKE" ~ "Left",
+      pid == "SPD" ~ "SPD",
+      pid == "Keiner Partei" ~ "none",
+      TRUE ~ "other"
+    )
+  ) %>%
+  select(-pid_date)
+
+data_federal %>% count(source)
+rm(survey_federal)
+```
+
+## Variables
+
+Recodes of the variables used in the models:
+
+- `treatment`: experimental group (Control, Treatment (5), Treatment (500)),
+- `lead_time`: days between the interview and the election day (23 February 2025), used as survey date fixed effects,
+- `pol_interest`: political interest as an ordered factor,
+- `turnout_int_dummy`: intends to vote (10 on the 1-10 scale or already voted by mail),
+- `zs_int`: vote intention with the party names of the long data (CDU and CSU combined),
+
+The table shows the size of the experimental groups.
+
+```{r recodes}
+data_federal <- data_federal %>%
+  mutate(
+    treatment = factor(
+      group,
+      levels = c("control", "treatment_small", "treatment"),
+      labels = c("Control", "Treatment (5)", "Treatment (500)")
+    ),
+    # Days before the election (survey date fixed effects), computed in 01_create_replication_data.R
+    lead_time = factor(lead_time),
+    pol_interest = factor(
+      pol_interest,
+      levels = c("Überhaupt nicht", "Weniger stark", "Mittelmäßig", "Stark", "Sehr stark")
+    ),
+    turnout_int = factor(turnout_int, levels = rev(levels(turnout_int))),
+    # Turnout intention: 10 on the 1-10 scale or already voted by mail
+    turnout_int_dummy = case_when(
+      turnout_int %in% c("10", "Ich habe bereits Briefwahl gemacht.") ~ "ja",
+      turnout_int %in% as.character(1:9) ~ "nein",
+      TRUE ~ NA_character_
+    ),
+    turnout_int_dummy = factor(turnout_int_dummy, levels = c("nein", "ja")),
+    # Vote intention with the party names of the long data
+    zs_int = case_when(
+      list_vote_int %in% c("CDU", "CSU") ~ "CDU/CSU",
+      list_vote_int %in% c("B'90/Die Grünen") ~ "Greens",
+      list_vote_int %in% c("Die Linke") ~ "Left",
+      list_vote_int %in% c("SSW", "Eine andere Partei") ~ "Others",
+      list_vote_int == "ungueltig" ~ "Invalid",
+      list_vote_int == "Weiß ich nicht" ~ "Don't know",
+      TRUE ~ list_vote_int
+    )
+  ) %>%
+  set_variable_labels(
+    lead_time         = "Number of days before the election the interview took place",
+    turnout_int_dummy = "Turnout intention dummy (10 or mail = yes)"
+  )
+
+data_federal %>% count(treatment)
+```
+
+The sample composition table (Table B.3) compares the sample with the electorate.
+For this, age, vote intention, gender, education, turnout intention and state are grouped into the categories of the official statistics, with English labels.
+Respondents who answered "diverse" are counted as men (Men*), as in the statistics of the Federal Returning Officer.
+The tables show the distribution of each recoded variable.
+
+```{r recodes_sample_composition}
+data_federal <- data_federal %>%
+  mutate(
+    age_group = case_when(
+      age < 30 ~ "18-29",
+      age >= 30 & age < 40 ~ "30-39",
+      age >= 40 & age < 50 ~ "40-49",
+      age >= 50 & age < 60 ~ "50-59",
+      age >= 60 ~ "60+",
+      TRUE ~ NA_character_
+    ),
+    list_vote_int_eng = case_when(
+      list_vote_int %in% c("Eine andere Partei", "SSW", "ungueltig", "Weiß ich nicht") ~ "Other",
+      list_vote_int == "B'90/Die Grünen" ~ "Greens",
+      list_vote_int == "Die Linke" ~ "Left",
+      TRUE ~ list_vote_int
+    ),
+    list_vote_int_eng = factor(list_vote_int_eng,
+      levels = c("AfD", "BSW", "CDU", "CSU", "FDP", "Greens", "Left", "SPD", "Other")
+    ),
+    gender_eng = case_when(
+      gender == "Weiblich" ~ "Women",
+      gender == "Männlich" ~ "Men",
+      gender == "Divers" ~ "Diverse",
+      TRUE ~ gender
+    ),
+    # Diverse counted as men (Men*)
+    gender_eng2 = case_when(gender_eng == "Diverse" ~ "Men", TRUE ~ gender_eng),
+    education_eng = case_when(
+      education %in% c(
+        "Schule beendet ohne Abschluss",
+        "Hauptschulabschluss, Volksschulabschluss, Abschluss der polytechnischen Oberschule 8. oder 9. Klasse"
+      ) ~ "Low",
+      education %in% c(
+        "Realschulabschluss, Mittlere Reife, Fachschulreife oder Abschluss der polytechnischen Oberschule 10. Klasse"
+      ) ~ "Medium",
+      education == "Bin noch Schüler/in" ~ "Still in School",
+      education == "Anderen Schulabschluss, und zwar:" ~ NA,
+      education %in% c(
+        "Fachhochschulreife (Abschluss einer Fachoberschule etc.)",
+        "Abitur bzw. erweiterte Oberschule mit Abschluss 12. Klasse (Hochschulreife)"
+      ) ~ "High",
+      TRUE ~ education
+    ),
+    education_eng = factor(education_eng,
+      levels = c("Low", "Medium", "High", "Still in School")
+    ),
+    turnout_int_eng = case_when(
+      turnout_int_dummy == "nein" ~ "No",
+      turnout_int_dummy == "ja" ~ "Yes",
+      TRUE ~ NA_character_
+    ),
+    bula_en = case_when(
+      bula == "Baden-Württemberg" ~ "Baden-Württemberg",
+      bula == "Bayern" ~ "Bavaria",
+      bula == "Berlin" ~ "Berlin",
+      bula == "Brandenburg" ~ "Brandenburg",
+      bula == "Bremen" ~ "Bremen",
+      bula == "Hamburg" ~ "Hamburg",
+      bula == "Hessen" ~ "Hesse",
+      bula == "Mecklenburg-Vorpommern" ~ "Mecklenburg-Western Pomerania",
+      bula == "Niedersachsen" ~ "Lower Saxony",
+      bula == "Nordrhein-Westfalen" ~ "North Rhine-Westphalia",
+      bula == "Rheinland-Pfalz" ~ "Rhineland-Palatinate",
+      bula == "Saarland" ~ "Saarland",
+      bula == "Sachsen" ~ "Saxony",
+      bula == "Sachsen-Anhalt" ~ "Saxony-Anhalt",
+      bula == "Schleswig-Holstein" ~ "Schleswig-Holstein",
+      bula == "Thüringen" ~ "Thuringia",
+      TRUE ~ NA_character_
+    )
+  )
+
+data_federal %>% count(age_group)
+data_federal %>% count(gender_eng2)
+data_federal %>% count(education_eng)
+data_federal %>% count(turnout_int_eng)
+data_federal %>% count(list_vote_int_eng)
+```
+
+## Response Times
+
+The survey file contains two kinds of response times (in seconds):
+
+- the time spent on the page of the expectation item (`t_list_votes_exp_Page_Submit`), the dependent variable of H1 (logged),
+- the times of five filler items (birth year, vote intention, eligibility, turnout intention, political interest), from which 22 computes each respondent's baseline speed.
+
+The output summarizes the response time of the expectation item in seconds.
+
+```{r response_times}
+time_vars_federal <- c("t_list_votes_exp_Page_Submit", baseline_speed_vars)
+
+data_federal <- data_federal %>%
+  # Logged response time (H1)
+  mutate(t_list_votes_exp_Page_Submit_log = log(t_list_votes_exp_Page_Submit))
+
+data_federal %>%
+  summarize(
+    n_missing = sum(is.na(t_list_votes_exp_Page_Submit)),
+    min = min(t_list_votes_exp_Page_Submit, na.rm = TRUE),
+    median = median(t_list_votes_exp_Page_Submit, na.rm = TRUE),
+    mean = mean(t_list_votes_exp_Page_Submit, na.rm = TRUE),
+    max = max(t_list_votes_exp_Page_Submit, na.rm = TRUE)
+  ) %>%
+  print_values(digits = 1) # helper
+```
+
+## Vote Share Expectations (Long Data)
+
+Respondents gave their expected vote share for seven parties and *Others* on sliders.
+The wide data are reshaped to one row per respondent and party, and the official result of the party is joined.
+The forecast error is the expected minus the actual vote share (`list_votes_exp_diff`, in percentage points).
+Positive values mean the party was overestimated.
+The H3 models use these long data.
+
+```{r long}
+list_votes_exp_vars_federal <- c(
+  "CDU/CSU" = "list_votes_exp_cdu",
+  "AfD"     = "list_votes_exp_afd",
+  "Left"    = "list_votes_exp_linke",
+  "Greens"  = "list_votes_exp_gruene",
+  "SPD"     = "list_votes_exp_spd",
+  "FDP"     = "list_votes_exp_fdp",
+  "BSW"     = "list_votes_exp_bsw",
+  "Others"  = "list_votes_exp_other"
+)
+
+data_federal_long <- data_federal %>%
+  select(
+    ResponseId, id_unique, treatment, lead_time,
+    age, gender, education,
+    list_vote_int, starts_with("ptv_"), pid,
+    all_of(list_votes_exp_vars_federal)
+  ) %>%
+  pivot_longer(
+    cols = all_of(names(list_votes_exp_vars_federal)),
+    names_to = "party",
+    values_to = "list_votes_exp"
+  ) %>%
+  left_join(
+    results_official_federal %>% rename(list_votes_result = result_official),
+    by = "party"
+  ) %>%
+  mutate(list_votes_exp_diff = list_votes_exp - list_votes_result) %>%
+  relocate(party, list_votes_exp, list_votes_result, list_votes_exp_diff, .after = id_unique)
+
+data_federal_long %>%
+  filter(ResponseId == first(ResponseId)) %>%
+  select(party, list_votes_exp, list_votes_result, list_votes_exp_diff) %>%
+  print_values() # helper
+```
+
+## Individual Accuracy (MAE, RMSE)
+
+The accuracy of each respondent's expectations, the dependent variable of H2:
+the mean absolute error (MAE) and, as a robustness check, the root mean squared error (RMSE) of the forecast errors over the eight categories (seven parties and *Others*).
+Lower values mean more accurate expectations.
+
+```{r accuracy}
+accuracy_federal <- data_federal_long %>%
+  group_by(ResponseId) %>%
+  summarize(
+    list_votes_exp_mae  = mean(abs(list_votes_exp_diff)),
+    list_votes_exp_rmse = sqrt(mean(list_votes_exp_diff^2)),
+    .groups = "drop"
+  )
+
+data_federal <- data_federal %>%
+  left_join(accuracy_federal, by = "ResponseId") %>%
+  set_variable_labels(
+    list_votes_exp_mae  = "MAE List Vote Expectations",
+    list_votes_exp_rmse = "RMSE List Vote Expectations"
+  )
+
+data_federal %>%
+  summarize(across(c(list_votes_exp_mae, list_votes_exp_rmse), list(mean = mean, sd = sd))) %>%
+  print_values() # helper
+
+rm(accuracy_federal)
+```
+
+
+# Save
+
+Only the variables used later are kept.
+
+```{r save}
+data_federal <- data_federal %>%
+  select(
+    # IDs and interview
+    ResponseId, id_unique, source, interview_date, duration, lead_time,
+    # Experiment
+    treatment, pledge_expectations,
+    # Demographics
+    age, age_group, gender, gender_eng, gender_eng2,
+    education, education_eng, bula, bula_en,
+    # Political variables
+    pol_interest, turnout_int, turnout_int_dummy, turnout_int_eng,
+    list_vote_int, list_vote_int_eng, zs_int, starts_with("ptv_"), pid,
+    # Vote share expectations and accuracy
+    all_of(unname(list_votes_exp_vars_federal)),
+    list_votes_exp_mae, list_votes_exp_rmse,
+    # Response times
+    all_of(time_vars_federal), t_list_votes_exp_Page_Submit_log
+  )
+
+save(data_federal, file = "data/processed/data_federal.rdata")
+save(data_federal_long, file = "data/processed/data_federal_long.rdata")
+```

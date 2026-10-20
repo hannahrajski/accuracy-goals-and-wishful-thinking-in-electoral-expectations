@@ -1,0 +1,50 @@
+
+\begin{table}[t]
+\captionsetup{skip=3pt}
+\caption{Linear Regression Models for the Federal Election}
+\centering
+\footnotesize
+\renewcommand{\arraystretch}{0.9}
+\begin{tabular}{l *{8}{>{\centering\arraybackslash}p{2cm}}}
+\toprule
+ & \multicolumn{1}{c}{H1} & \multicolumn{2}{c}{H2} & \multicolumn{5}{c}{H3} \\
+\cmidrule(lr){2-2} \cmidrule(lr){3-4} \cmidrule(lr){5-9}
+ & \multicolumn{1}{c}{Time} & \multicolumn{1}{c}{MAE} & \multicolumn{1}{c}{RMSE} & \multicolumn{1}{c}{PTV Dummy} & \multicolumn{1}{c}{\makecell{PTV Dummy \\ (incl. Ties)}} & \multicolumn{1}{c}{VI Dummy} & \multicolumn{1}{c}{PID Dummy} & \multicolumn{1}{c}{PTV Score} \\
+\cmidrule(lr){2-2} \cmidrule(lr){3-3} \cmidrule(lr){4-4} \cmidrule(lr){5-5} \cmidrule(lr){6-6} \cmidrule(lr){7-7} \cmidrule(lr){8-8} \cmidrule(lr){9-9}
+ & (1) & (2a) & (2b) & (3a) & (3b) & (3c) & (3d) & (3e) \\
+\midrule
+Intercept                & $2.99^{***}$ & $3.93^{***}$  & $4.88^{***}$  & $-0.68^{***}$ & $-0.64^{***}$ & $-0.86^{***}$ & $-0.41^{***}$ & $-2.61^{***}$ \\
+                         & $(0.08)$     & $(0.37)$      & $(0.46)$      & $(0.09)$      & $(0.11)$      & $(0.09)$      & $(0.10)$      & $(0.14)$      \\
+T(5) (ref: C)            & $0.08^{***}$ & $-0.23^{***}$ & $-0.27^{***}$ & $0.07^{**}$   & $0.07^{**}$   & $0.08^{***}$  & $0.11^{**}$   & $0.26^{***}$  \\
+                         & $(0.01)$     & $(0.04)$      & $(0.05)$      & $(0.03)$      & $(0.02)$      & $(0.02)$      & $(0.04)$      & $(0.06)$      \\
+T(500)                   & $0.13^{***}$ & $-0.32^{***}$ & $-0.39^{***}$ & $0.09^{***}$  & $0.09^{***}$  & $0.12^{***}$  & $0.15^{***}$  & $0.33^{***}$  \\
+                         & $(0.01)$     & $(0.04)$      & $(0.05)$      & $(0.02)$      & $(0.02)$      & $(0.02)$      & $(0.04)$      & $(0.06)$      \\
+Baseline Speed           & $0.36^{***}$ &               &               &               &               &               &               &               \\
+                         & $(0.01)$     &               &               &               &               &               &               &               \\
+Survey Duration          & $0.00^{***}$ &               &               &               &               &               &               &               \\
+                         & $(0.00)$     &               &               &               &               &               &               &               \\
+Preferred Party          &              &               &               & $6.62^{***}$  & $5.24^{***}$  & $6.62^{***}$  & $5.82^{***}$  &               \\
+                         &              &               &               & $(0.12)$      & $(0.10)$      & $(0.11)$      & $(0.16)$      &               \\
+T(5) x Preferred Party   &              &               &               & $-0.32^{*}$   & $-0.26^{*}$   & $-0.36^{*}$   & $-0.50^{*}$   &               \\
+                         &              &               &               & $(0.15)$      & $(0.13)$      & $(0.15)$      & $(0.22)$      &               \\
+T(500) x Preferred Party &              &               &               & $-0.42^{**}$  & $-0.26^{*}$   & $-0.59^{***}$ & $-0.63^{**}$  &               \\
+                         &              &               &               & $(0.15)$      & $(0.13)$      & $(0.15)$      & $(0.22)$      &               \\
+PTV Score                &              &               &               &               &               &               &               & $0.77^{***}$  \\
+                         &              &               &               &               &               &               &               & $(0.01)$      \\
+T(5) x PTV Score         &              &               &               &               &               &               &               & $-0.05^{***}$ \\
+                         &              &               &               &               &               &               &               & $(0.01)$      \\
+T(500) x PTV Score       &              &               &               &               &               &               &               & $-0.07^{***}$ \\
+                         &              &               &               &               &               &               &               & $(0.01)$      \\
+Date Fixed Effects & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+Party Fixed Effects & - & - & - & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+Clustered SE & - & - & - & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+\midrule
+R$^2$                    & $0.09$       & $0.01$        & $0.01$        & $0.16$        & $0.13$        & $0.15$        & $0.15$        & $0.17$        \\
+Adj. R$^2$               & $0.09$       & $0.01$        & $0.01$        & $0.16$        & $0.13$        & $0.15$        & $0.15$        & $0.17$        \\
+Num. obs.                & $28286$      & $28430$       & $28430$       & $160290$      & $198870$      & $170072$      & $73493$       & $197547$      \\
+Num. respondents & $28286$ & $28430$ & $28430$ & $23056$ & $28410$ & $24296$ & $10499$ & $28410$ \\
+\bottomrule
+\multicolumn{9}{l}{\parbox{\dimexpr\linewidth-2\tabcolsep\relax}{\scriptsize{Note: * p < 0.05, ** p < 0.01, *** p < 0.001. Different linear regression models have been estimated. All include survey date fixed effects. The first \textit{Time} model (1) has response latency (log(s)) as the dependent variable to test H1. Models (2a) and (2b) are concerned with overall accuracy, measured as \textit{MAE} and, as a robustness check, \textit{RMSE}, to test H2. For H3, the dependent variable is the forecast error (difference between respondents' expected vote share for a party and the actual result). Models include party fixed effects and standard errors are clustered by respondent. In Model (3a), the \textit{preferred party} is the party to which respondents assign the highest PTV; respondents who give the highest PTV to more than one party are not included. As robustness checks, the preferred party is operationalized as the party with the highest PTV including ties (Model (3b)), the party respondents intend to vote for (Model (3c)) or the party respondents identify with (Model (3d)). Model (3e) assesses degrees of party preference through the propensity to vote (measure from 1 to 11). For Models (3a)--(3e), \textit{Num. obs.} counts respondent $\times$ party observations and \textit{Num. respondents} the respondents.}}}
+\end{tabular}
+\label{tab:models_federal}
+\end{table}

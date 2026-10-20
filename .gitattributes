@@ -1,0 +1,8 @@
+# Normalize line endings: LF in the repository, native line endings in checkouts
+* text=auto
+
+# Binary files
+*.rdata binary
+*.RData binary
+*.xlsx binary
+*.pdf binary

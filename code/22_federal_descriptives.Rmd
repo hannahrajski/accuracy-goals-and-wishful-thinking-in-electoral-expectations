@@ -1,0 +1,681 @@
+---
+title: "Federal Election 2025: Sample and Descriptives"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: false
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+source(rprojroot::find_rstudio_root_file("code/10_helpers.R"))
+
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 6,
+  fig.height = 4,
+  fig.align = "center",
+  dpi = 300,
+  dev = "png",
+  comment = "",
+  error = FALSE
+)
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+options(width = 120) # same line width of printed output in RStudio and Rscript
+options(digits = 3)
+set.seed(2026)
+
+dir.create(file.path(rprojroot::find_rstudio_root_file(), "output/tables"), recursive = TRUE, showWarnings = FALSE)
+dir.create(file.path(rprojroot::find_rstudio_root_file(), "output/figures"), recursive = TRUE, showWarnings = FALSE)
+
+# Figures: save_figure() (10_helpers.R) saves every plot to data/processed/figures/<name>.rds
+# PDF in output/figures/ from this script: B3, B5
+# Subfigures, combined with the Saxony ones only in 40_combine_figures.Rmd: 1a, B1a, B2a, B2b
+```
+
+The PTV item of each party.
+
+```{r constants}
+ptv_col_by_party_federal <- c(
+  "AfD"     = "ptv_afd",
+  "BSW"     = "ptv_bsw",
+  "CDU/CSU" = "ptv_cdu",
+  "FDP"     = "ptv_fdp",
+  "Greens"  = "ptv_gruene",
+  "Left"    = "ptv_linke",
+  "SPD"     = "ptv_spd"
+)
+```
+
+Data of `21_federal_data_preparation.Rmd`: one row per respondent, one row per respondent and party, and the official result.
+
+```{r data}
+load("data/processed/data_federal.rdata")
+load("data/processed/data_federal_long.rdata")
+load("data/processed/results_official_federal.rdata")
+```
+
+
+# Data
+
+## Exclusion of Satisficers
+
+Respondents who allocated 50% (the slider maximum) to two parties are excluded as satisficers (paper section Data).
+For each respondent, the number of sliders set to 50 is counted, and respondents with two or more are flagged as `excluded`.
+Two data sets are kept for every later step:
+
+- `data_federal_main`: the analytic sample, without the excluded respondents,
+- `data_federal_noexcl`: all respondents, for the robustness checks without exclusions.
+
+The same split is also made for the long data (one row per respondent and party).
+
+```{r exclusions}
+list_votes_exp_vars_federal <- c(
+  "list_votes_exp_cdu", "list_votes_exp_afd", "list_votes_exp_linke",
+  "list_votes_exp_gruene", "list_votes_exp_spd", "list_votes_exp_fdp",
+  "list_votes_exp_bsw", "list_votes_exp_other"
+)
+data_federal_noexcl <- data_federal %>%
+  mutate(
+    n_50 = rowSums(across(all_of(list_votes_exp_vars_federal)) == 50),
+    excluded = n_50 >= 2,
+    excl_reason = if_else(excluded, "answered 50 twice", "included")
+  ) %>%
+  select(-n_50)
+
+data_federal_long_noexcl <- data_federal_long %>%
+  left_join(data_federal_noexcl %>% select(ResponseId, excluded, excl_reason, zs_int), by = "ResponseId")
+
+data_federal_main <- data_federal_noexcl %>% filter(!excluded)
+data_federal_long_main <- data_federal_long_noexcl %>% filter(!excluded)
+```
+
+Recruited, excluded and analytic sample.
+
+```{r sample_sizes}
+data_federal_noexcl %>%
+  summarize(recruited = n(), analytic = sum(!excluded), excluded = sum(excluded))
+
+rm(data_federal, data_federal_long)
+```
+
+## Benchmarks for the Sample Composition
+
+The sample composition table (Table B.3) compares the sample with benchmarks from official statistics.
+
+Eligible voters by gender, birth cohort and state, from the representative electoral statistics of the Federal Returning Officer (`btw25_rws_bw2.csv`).
+Birth cohorts are grouped into the age groups of the survey, and men include diverse and other voters (`m|d|o`), as Men* in the survey.
+
+```{r benchmark_age_gender_state}
+data_federal_returning_officer <- read_delim("data/input/benchmark/btw25_rws_bw2.csv",
+  delim = ";", escape_double = FALSE, trim_ws = TRUE # the file is semicolon-separated
+) %>%
+  set_names(c(
+    "Land", "Geschlecht", "Geburtsjahresgruppe", "Wahlberechtigte",
+    "Wahlberechtigte ohne Wahlscheinvermerk", "Wahlberechtigte mit Wahlscheinvermerk",
+    "Wählende", "Wählende ohne Wahlschein", "Wählende mit Wahlschein", "Wahlbeteiligung"
+  ))
+
+df_fro_gender_age_federal <- data_federal_returning_officer %>%
+  filter(Land == "Bund", Geschlecht != "Summe", Geburtsjahresgruppe != "Summe") %>%
+  mutate(
+    age_group = case_when(
+      Geburtsjahresgruppe %in% c("2005-2007", "2001-2004", "1996-2000") ~ "18-29",
+      Geburtsjahresgruppe %in% c("1991-1995", "1986-1990") ~ "30-39",
+      Geburtsjahresgruppe %in% c("1981-1985", "1976-1980") ~ "40-49",
+      Geburtsjahresgruppe == "1966-1975" ~ "50-59",
+      Geburtsjahresgruppe %in% c("1956-1965", "<=1955") ~ "60+",
+      TRUE ~ NA_character_
+    ),
+    gender = case_when(
+      Geschlecht == "m|d|o" ~ "Men",
+      Geschlecht == "w" ~ "Women",
+      TRUE ~ NA_character_
+    ),
+    Wahlberechtigte = as.numeric(Wahlberechtigte)
+  ) %>%
+  filter(!is.na(gender)) %>%
+  group_by(age_group, gender) %>%
+  summarize(Wahlberechtigte = sum(Wahlberechtigte, na.rm = TRUE), .groups = "drop")
+
+# Totals by gender over all age groups
+df_fro_gender_age_federal <- df_fro_gender_age_federal %>%
+  bind_rows(
+    df_fro_gender_age_federal %>%
+      group_by(gender) %>%
+      summarize(Wahlberechtigte = sum(Wahlberechtigte), .groups = "drop") %>%
+      mutate(age_group = "Insgesamt")
+  )
+
+df_fro_age_federal <- df_fro_gender_age_federal %>%
+  filter(age_group != "Insgesamt") %>%
+  pivot_wider(names_from = gender, values_from = Wahlberechtigte) %>%
+  mutate(
+    eligible_age_group = Men + Women,
+    eligible_total     = sum(eligible_age_group),
+    benchmark          = eligible_age_group / eligible_total
+  )
+
+df_fro_gender_federal <- df_fro_gender_age_federal %>%
+  filter(age_group == "Insgesamt") %>%
+  select(-age_group) %>%
+  rename(eligible_gender_group = Wahlberechtigte) %>%
+  mutate(
+    eligible_total = sum(eligible_gender_group),
+    benchmark      = eligible_gender_group / eligible_total
+  )
+
+df_fro_states_federal <- data_federal_returning_officer %>%
+  filter(Land != "Bund", Geschlecht == "Summe", Geburtsjahresgruppe == "Summe") %>%
+  select(Land, Wahlberechtigte) %>%
+  mutate(Land = case_match(
+    Land,
+    "BW" ~ "Baden-Württemberg",
+    "BY" ~ "Bavaria",
+    "BE" ~ "Berlin",
+    "BB" ~ "Brandenburg",
+    "HB" ~ "Bremen",
+    "HH" ~ "Hamburg",
+    "HE" ~ "Hesse",
+    "MV" ~ "Mecklenburg-Western Pomerania",
+    "NI" ~ "Lower Saxony",
+    "NW" ~ "North Rhine-Westphalia",
+    "RP" ~ "Rhineland-Palatinate",
+    "SL" ~ "Saarland",
+    "SN" ~ "Saxony",
+    "ST" ~ "Saxony-Anhalt",
+    "SH" ~ "Schleswig-Holstein",
+    "TH" ~ "Thuringia"
+  )) %>%
+  rename(eligible_state = Wahlberechtigte, bula = Land) %>%
+  mutate(
+    eligible_state = as.numeric(eligible_state),
+    eligible_total = sum(eligible_state),
+    benchmark      = eligible_state / eligible_total
+  ) %>%
+  select(bula, benchmark)
+```
+
+Benchmark of the vote intention: the election result, with CDU and CSU separately, because the survey asked for them separately.
+
+```{r benchmark_vote}
+# Second votes of CDU and CSU, as shares of the valid second votes
+votes_federal <- read_csv("data/input/results/btw25_second_votes_federal.csv", show_col_types = FALSE)
+valid_second_votes_federal <- votes_federal %>% filter(party == "Valid second votes") %>% pull(votes)
+cdu_csu_benchmark_federal <- votes_federal %>%
+  filter(party %in% c("CDU", "CSU")) %>%
+  transmute(party, benchmark = votes / valid_second_votes_federal)
+
+zs_benchmark_federal <- results_official_federal %>%
+  mutate(
+    party = if_else(party == "Others", "Other", party),
+    benchmark = result_official / 100
+  ) %>%
+  select(-result_official) %>%
+  filter(party != "CDU/CSU") %>%
+  bind_rows(cdu_csu_benchmark_federal)
+rm(votes_federal, valid_second_votes_federal, cdu_csu_benchmark_federal)
+```
+
+Benchmark of education: the school-leaving qualification of the population (Mikrozensus, GENESIS table 12211-0100).
+The qualifications are grouped into the three levels of the survey (Low, Medium, High) plus "Still in School".
+
+```{r benchmark_education}
+df_census_age_educ_federal <- read_excel("data/input/benchmark/12211-0100_de_2025.xlsx") %>%
+  set_names(c(
+    "gender", "age_group", "Noch in schulischer Ausbildung", "Haupt- (Volks-)schulabschluss",
+    "Abschluss der polytechnischen Oberschule", "Realschule oder gleichwertiger Abschluss",
+    "Fachhochschul- oder Hochschulreife", "Ohne Angabe zur Art des Abschlusses",
+    "Ohne allgemeinen Schulabschluss", "Insgesamt"
+  ))
+
+df_census_educ_federal <- df_census_age_educ_federal %>%
+  drop_na("age_group") %>%
+  fill(gender, .direction = "down") %>%
+  filter(gender == "Insgesamt", age_group == "Insgesamt") %>%
+  select(-age_group, gender) %>%
+  mutate(across(.cols = everything(), .fns = ~ as.numeric(.)),
+    Low = `Haupt- (Volks-)schulabschluss` + `Ohne allgemeinen Schulabschluss`,
+    Medium = `Realschule oder gleichwertiger Abschluss` + `Abschluss der polytechnischen Oberschule`,
+    High = `Fachhochschul- oder Hochschulreife`,
+    `Still in School` = `Noch in schulischer Ausbildung`,
+    census_total = Insgesamt * 1000
+  ) %>%
+  select(Low, Medium, High, `Still in School`, census_total) %>%
+  pivot_longer(cols = Low:`Still in School`, names_to = "education_eng", values_to = "pop_clean") %>%
+  mutate(pop_clean = pop_clean * 1000, benchmark = pop_clean / census_total) %>%
+  select(education_eng, benchmark)
+```
+
+## Response Times
+
+The H1 model controls for each respondent's general speed in the survey.
+This baseline speed is the log of the mean response time of five filler items (birth year, vote intention, eligibility, turnout intention, political interest).
+Item times more than two standard deviations from the item mean are left out of this mean.
+
+Response times of the expectation item more than two standard deviations above the mean are outliers and removed from the H1 models (paper section Modeling).
+Since the lower cutoff (mean - 2 SD) is negative, no response time is removed at the bottom.
+
+```{r response_times}
+data_federal_time_main <- add_baseline_speed(data_federal_main) # helper
+data_federal_time_noexcl <- add_baseline_speed(data_federal_noexcl) # helper
+
+t_mean_federal <- mean(data_federal_time_main$t_list_votes_exp_Page_Submit, na.rm = TRUE)
+t_threshold_upper_federal <- compute_time_cutoff(data_federal_time_main$t_list_votes_exp_Page_Submit) # helper
+
+# No response lies more than 2 SD below the mean
+data_federal_time_main %>%
+  summarize(lower_cutoff_below_zero = mean(t_list_votes_exp_Page_Submit) - 2 * sd(t_list_votes_exp_Page_Submit) < 0)
+
+data_federal_time_main <- data_federal_time_main %>%
+  mutate(t_outlier = t_list_votes_exp_Page_Submit > t_threshold_upper_federal)
+
+data_federal_time_main_nooutliers <- data_federal_time_main %>% filter(!t_outlier)
+```
+
+Response times before outlier removal (paper section Modeling and note of Figure B.1).
+
+```{r times_before_removal}
+data_federal_time_main %>%
+  summarize(
+    n = n(),
+    min = min(t_list_votes_exp_Page_Submit),
+    max = max(t_list_votes_exp_Page_Submit),
+    mean = mean(t_list_votes_exp_Page_Submit),
+    sd = sd(t_list_votes_exp_Page_Submit),
+    cutoff = t_threshold_upper_federal,
+    n_removed = sum(t_outlier),
+    n_after_removal = sum(!t_outlier)
+  ) %>%
+  print_values(digits = 1) # helper
+```
+
+## Preferred Party (PTV, Vote Intention, Party Identification)
+
+H3 compares the forecast error for the respondent's preferred party with that for the other parties.
+The preferred party is the party with the highest propensity to vote (PTV).
+Respondents who give their highest PTV to more than one party have no clearly preferred party and are removed (paper section Modeling).
+
+Alternative measures (robustness checks):
+
+- PTV dummy, but allowing ties (all parties with the highest PTV count as preferred),
+- vote intention,
+- party identification (from the re-interviews of wave 2),
+- the PTV score of each party (1-11) instead of a dummy.
+
+First, the party (or the tied parties, comma-separated) with the highest PTV of each respondent.
+
+```{r ptv_top}
+data_federal_ptvtop_noexcl <- add_ptv_top(data_federal_noexcl, ptv_col_by_party_federal) # helper
+data_federal_ptvtop_main <- data_federal_ptvtop_noexcl %>% filter(!excluded)
+```
+
+Respondents with no PTV at all, with a tied highest PTV and with a clearly preferred party.
+
+```{r ptv_top_counts}
+data_federal_ptvtop_main %>%
+  summarize(
+    no_ptv = nrow(data_federal_main) - n(),
+    tied = sum(str_detect(preferred_party, ",")),
+    clear = sum(!str_detect(preferred_party, ","))
+  )
+```
+
+The clearly preferred party (PTV, without ties) is added to the long data.
+Respondents with tied PTVs get `NA`.
+
+```{r pref_long}
+data_federal_long_noexcl <- data_federal_long_noexcl %>%
+  left_join(
+    data_federal_ptvtop_noexcl %>%
+      filter(!str_detect(preferred_party, ",")) %>%
+      select(ResponseId, preferred_party),
+    by = "ResponseId"
+  )
+data_federal_long_main <- data_federal_long_noexcl %>% filter(!excluded)
+```
+
+For every measure, a dummy in the long data: 1 if the party of the row is the respondent's preferred party, 0 if not.
+*Others* is left out, since it is no party one can prefer.
+The PTV score of the party of each row is added as well.
+
+```{r pref_dummies}
+pref_long_federal <- create_pref_long_data(
+  data_federal_long_noexcl, data_federal_ptvtop_noexcl, # helper
+  ptv_col_by_party_federal, parties_7_federal
+)
+```
+
+The model data of the H3 models, one data set per measure, for the main sample and without exclusions.
+Each keeps the rows with a non-missing value on its measure.
+The table shows the number of respondents and rows (respondent × party) per measure in the main sample.
+
+```{r pref_model_data}
+subsets_federal_main <- create_pref_model_data(pref_long_federal %>% filter(!excluded) %>% select(-excluded)) # helper
+data_federal_ptv_main <- subsets_federal_main$ptv
+data_federal_vi_main <- subsets_federal_main$vi
+data_federal_pid_main <- subsets_federal_main$pid
+data_federal_ptvscore_main <- subsets_federal_main$ptvscore
+data_federal_ptvties_main <- subsets_federal_main$ptvties
+
+subsets_federal_noexcl <- create_pref_model_data(pref_long_federal %>% select(-excluded)) # helper
+data_federal_ptv_noexcl <- subsets_federal_noexcl$ptv
+data_federal_vi_noexcl <- subsets_federal_noexcl$vi
+data_federal_pid_noexcl <- subsets_federal_noexcl$pid
+data_federal_ptvscore_noexcl <- subsets_federal_noexcl$ptvscore
+data_federal_ptvties_noexcl <- subsets_federal_noexcl$ptvties
+
+subsets_federal_main %>%
+  map_dfr(~ summarize(.x, respondents = n_distinct(ResponseId), rows = n()), .id = "measure")
+```
+
+For the descriptives of the preferred party: one row per respondent, the row of the preferred party, per measure.
+
+```{r pref_party_rows}
+data_federal_prefparty_ptv_main <- create_pref_party_data(data_federal_long_main, "preferred_party", parties_7_federal) # helper
+data_federal_prefparty_vi_main <- create_pref_party_data(data_federal_long_main, "zs_int", parties_7_federal) # helper
+data_federal_prefparty_pid_main <- create_pref_party_data(data_federal_long_main, "pid", parties_7_federal) # helper
+
+rm(pref_long_federal, subsets_federal_main, subsets_federal_noexcl, data_federal_ptvtop_noexcl)
+```
+
+
+# Sample
+
+Size and field period of the analytic sample (paper section Data).
+
+```{r field_period}
+data_federal_main %>%
+  summarize(n = n(), first_day = min(interview_date), last_day = max(interview_date))
+```
+
+Commitment pledge not to consult outside sources (%).
+
+```{r pledge}
+data_federal_noexcl %>%
+  count(pledge_expectations) %>%
+  mutate(pct = 100 * n / sum(n)) %>%
+  print_values() # helper
+```
+
+## Sample Composition (Table B.3)
+
+Sample before exclusions compared with the electorate (left) and change through the exclusions (right).
+First, the benchmark of every category of the table.
+
+```{r benchmarks_by_category}
+df_benchmark_raw_federal <- bind_rows(
+  compute_group_shares(data_federal_main, "age_group", "Age Group", election = "federal") %>% # helper
+    left_join(df_fro_age_federal %>% select(age_group, benchmark), by = c("category" = "age_group")),
+  compute_group_shares(data_federal_main, "gender_eng2", "Gender", election = "federal") %>% # helper
+    left_join(df_fro_gender_federal %>% select(gender, benchmark), by = c("category" = "gender")) %>%
+    mutate(category = if_else(category == "Men", "Men*", category)),
+  compute_group_shares(data_federal_main, "education_eng", "Education", election = "federal") %>% # helper
+    left_join(df_census_educ_federal, by = c("category" = "education_eng")),
+  compute_group_shares(data_federal_main, "turnout_int_eng", "Turnout Intention", election = "federal") %>% # helper
+    filter(category == "Yes") %>%
+    mutate(benchmark = 0.825),
+  compute_group_shares(data_federal_main, "list_vote_int_eng", "Vote Intention", election = "federal") %>% # helper
+    left_join(zs_benchmark_federal, by = c("category" = "party")),
+  compute_group_shares(data_federal_main, "bula_en", "State", election = "federal") %>% # helper
+    left_join(df_fro_states_federal, by = c("category" = "bula"))
+)
+
+df_benchmark_raw_federal %>%
+  transmute(variable, category, benchmark_pct = 100 * benchmark) %>%
+  print_values(digits = 1) # helper
+```
+
+The table: shares in the sample before exclusions with the difference to the benchmark, and shares in the main sample with the change through the exclusions, overall and by experimental group.
+It is written to LaTeX and shown here as HTML.
+
+```{r table_B3, results='asis'}
+balance_specs_federal <- tribble(
+  ~var,                ~label,
+  "age_group",         "Age Group",
+  "gender_eng2",       "Gender",
+  "education_eng",     "Education",
+  "turnout_int_eng",   "Turnout Intention",
+  "list_vote_int_eng", "Vote Intention",
+  "bula_en",           "State"
+)
+
+balance_groups_federal <- c(
+  full = "All",
+  control = "C",
+  t5 = "T(5)",
+  t500 = "T(500)"
+)
+
+df_balance_federal <- compute_balance_shares(data_federal_noexcl, balance_specs_federal, election = "federal") %>% # helper
+  rename_with(~ sub("^share_", "before_", .x), starts_with("share_")) %>%
+  full_join(
+    compute_balance_shares(data_federal_main, balance_specs_federal, election = "federal") %>% # helper
+      rename_with(~ sub("^share_", "main_", .x), starts_with("share_")),
+    by = c("variable", "category")
+  ) %>%
+  mutate(across(starts_with(c("before_", "main_")), ~ coalesce(.x, 0))) %>%
+  left_join(df_benchmark_raw_federal %>% select(variable, category, benchmark), by = c("variable", "category"))
+
+note_balance_federal <- paste0(
+  "Note: Cells show the share of respondents (\\%) before exclusions (left) and in the main ",
+  "sample (right), overall and by experimental group. In the main sample, ",
+  format(nrow(data_federal_noexcl) - nrow(data_federal_main), big.mark = ","),
+  " respondents who answered 50\\% twice are excluded. ",
+  "For the overall sample, the difference to a benchmark is shown in percentage points in ",
+  "parentheses. For the main sample, the difference to the overall sample before exclusions ",
+  "is shown. Darker shading indicates larger absolute differences (scale up to 20 ",
+  "percentage points on the left and up to 5 percentage points on the right). ",
+  "Benchmarks are the eligible voting population for age, gender, ",
+  "and federal state \\parencite{thefederalreturningofficerBundestagElection20252025}, ",
+  "the German population for education \\parencite{GENESISOnlineTabelleBevolkerung}, ",
+  "election results for vote intention, and actual turnout for turnout intention ",
+  "\\parencite{thefederalreturningofficerResultsGermany2025}. ",
+  "Men* includes men and diverse respondents."
+)
+
+write_balance_table( # helper
+  data = df_balance_federal,
+  groups = balance_groups_federal,
+  n_before = count_by_group(data_federal_noexcl, election = "federal"), # helper
+  n_main = count_by_group(data_federal_main, election = "federal"), # helper
+  caption = "Demographic Composition of the Federal Sample (Before and After Exclusions)",
+  label = "tab:balance_table_federal",
+  note = note_balance_federal,
+  file = "output/tables/table_B3_balance_demographics_federal.tex"
+)
+```
+
+
+# Preference Measures (Figure B.3)
+
+Respondents with a preferred party (one of the seven parties) on at least one measure.
+
+```{r pref_compare}
+data_prefcompare_ptv_vi_pid_federal_main <- data_federal_prefparty_ptv_main %>%
+  select(ResponseId, preferred_party) %>%
+  full_join(data_federal_prefparty_vi_main %>% select(ResponseId, zs_int), by = "ResponseId") %>%
+  full_join(data_federal_prefparty_pid_main %>% select(ResponseId, pid), by = "ResponseId")
+```
+
+Note of Figure B.3: respondents with at least one measure, share with a preferred party per measure, and agreement of the measures.
+
+```{r values_figure_B3}
+pref_measures_federal <- data_prefcompare_ptv_vi_pid_federal_main %>%
+  transmute(ResponseId, ptv = preferred_party, vi = zs_int, pid)
+
+pref_measures_federal %>%
+  summarize(across(c(ptv, vi, pid), ~ sum(.x %in% parties_7_federal))) %>%
+  pivot_longer(everything(), names_to = "measure", values_to = "n") %>%
+  mutate(pct = 100 * n / nrow(pref_measures_federal)) %>%
+  add_row(measure = "at least one", n = nrow(pref_measures_federal), pct = 100, .before = 1) %>%
+  print_values(digits = 1) # helper
+
+compute_pref_agreement(pref_measures_federal, parties_7_federal) %>% print_values(digits = 1) # helper
+```
+
+```{r figure_B3}
+party_order_federal <- c("AfD", "CDU/CSU", "FDP", "BSW", "SPD", "Greens", "Left")
+
+plot_alluvial_federal <- plot_pref_flow(pref_measures_federal, party_order_federal) # helper
+plot_alluvial_federal
+save_figure(plot_alluvial_federal, "figure_B3_desc_pref_comparison_federal",
+  election = "federal", # helper
+  width = "landscape", aspect = 6 / 10
+)
+```
+
+
+# Response Times (Figures B.1, B.2)
+
+```{r figure_B1}
+plot_response_times_outliers_federal <- plot_time_outliers(data_federal_time_main, t_mean_federal, t_threshold_upper_federal) # helper
+plot_response_times_outliers_federal
+save_figure(plot_response_times_outliers_federal, "figure_B1a_desc_time_dist_federal",
+  election = "federal", # helper
+  width = "subfigure", aspect = 6 / 8
+)
+```
+
+Response times in seconds and logged (dependent variable of H1), without outliers.
+
+```{r figure_B2}
+plot_response_times_s_federal <- plot_time_hist(data_federal_time_main_nooutliers, "t_list_votes_exp_Page_Submit", # helper
+  "Time in Seconds",
+  election = "federal"
+)
+plot_response_times_log_federal <- plot_time_hist(data_federal_time_main_nooutliers, "t_list_votes_exp_Page_Submit_log", # helper
+  "log(seconds)",
+  election = "federal"
+)
+plot_response_times_s_federal
+plot_response_times_log_federal
+
+save_figure(plot_response_times_s_federal, "figure_B2a_desc_time_hist_federal",
+  election = "federal", # helper
+  width = "subfigure", aspect = 6 / 8
+)
+save_figure(plot_response_times_log_federal, "figure_B2b_desc_time_loghist_federal",
+  election = "federal", # helper
+  width = "subfigure", aspect = 6 / 8
+)
+```
+
+
+# Vote Share Expectations (Figure 1, Table B.5)
+
+```{r figure_1a}
+plot_voteshare_dist_federal <- plot_vote_share_dist(data_federal_long_main, election = "federal") # helper
+save_figure(plot_voteshare_dist_federal, "figure_1a_desc_voteshare_dist_federal",
+  election = "federal", # helper
+  width = "half", aspect = 8 / 12
+)
+plot_voteshare_dist_federal
+```
+
+Spread of the individual expectations per party (paper section Data).
+
+```{r spread_expectations}
+data_federal_long_main %>%
+  group_by(party) %>%
+  summarize(result = first(list_votes_result), mean = mean(list_votes_exp), sd = sd(list_votes_exp)) %>%
+  arrange(sd) %>%
+  print_values(digits = 2) # helper
+```
+
+Mean, deviation from the result and SD per party, overall and by group.
+
+```{r table_B5}
+accuracy_table_data_federal <- compute_accuracy_by_group(data_federal_long_main, "all", election = "federal") %>% # helper
+  left_join(compute_accuracy_by_group(filter(data_federal_long_main, treatment == "Control"), "c", election = "federal"), # helper
+    by = c("party", "list_votes_result")
+  ) %>%
+  left_join(compute_accuracy_by_group(filter(data_federal_long_main, treatment == "Treatment (5)"), "t5", election = "federal"), # helper
+    by = c("party", "list_votes_result")
+  ) %>%
+  left_join(compute_accuracy_by_group(filter(data_federal_long_main, treatment == "Treatment (500)"), "t500", election = "federal"), # helper
+    by = c("party", "list_votes_result")
+  ) %>%
+  arrange(party)
+
+write_accuracy_table( # helper
+  accuracy_table_data_federal,
+  groups  = c(all = "Full Sample", c = "Control", t5 = "Treatment (5)", t500 = "Treatment (500)"),
+  caption = "Forecasting Accuracy by Party and Treatment Group (Federal)",
+  label   = "tab:accuracy_federal",
+  note    = note_accuracy,
+  file    = "output/tables/table_B5_accuracy_federal.tex"
+)
+```
+
+
+# Forecast Error for the Preferred Party (Figure B.5)
+
+```{r figure_B5}
+plot_pref_boxplot_federal <- plot_pref_boxplot(data_federal_prefparty_ptv_main) # helper
+plot_pref_boxplot_federal
+save_figure(plot_pref_boxplot_federal, "figure_B5_desc_pref_boxplot_ptv_federal",
+  election = "federal", # helper
+  width = "boxplot", aspect = 6 / 8
+)
+```
+
+Note of Figure B.5: preferred parties, share underestimating them, and observed and possible range of the forecast error (sliders from 0 to 50).
+
+```{r values_figure_B5}
+data_federal_prefparty_ptv_main %>%
+  group_by(party) %>%
+  summarize(
+    n = n(), pct_underestimated = 100 * mean(list_votes_exp_diff < 0),
+    observed_min = min(list_votes_exp_diff), observed_max = max(list_votes_exp_diff),
+    possible_min = -first(list_votes_result), possible_max = 50 - first(list_votes_result),
+    .groups = "drop"
+  ) %>%
+  mutate(pct_respondents = 100 * n / sum(n)) %>%
+  arrange(desc(n)) %>%
+  print_values(digits = 1) # helper
+```
+
+Share underestimating the preferred party, overall (%).
+
+```{r underestimated}
+data_federal_prefparty_ptv_main %>%
+  summarize(pct_underestimated = 100 * mean(list_votes_exp_diff < 0))
+```
+
+Highest PTV score of the preferred party.
+
+```{r ptv_score_preferred}
+data_federal_ptv_main %>%
+  filter(preferred_party_ptv_dummy == 1) %>%
+  count(ptv_score) %>%
+  mutate(pct = 100 * n / sum(n)) %>%
+  arrange(desc(ptv_score)) %>%
+  print_values(digits = 2) # helper
+```
+
+
+# Save for the Analysis
+
+The analysis data sets are saved to `data/processed/`, one file per data set.
+
+```{r save}
+save(data_federal_main,                 file = "data/processed/data_federal_main.rdata")
+save(data_federal_noexcl,               file = "data/processed/data_federal_noexcl.rdata")
+save(data_federal_time_main_nooutliers, file = "data/processed/data_federal_time_main_nooutliers.rdata")
+save(data_federal_time_noexcl,          file = "data/processed/data_federal_time_noexcl.rdata")
+save(data_federal_ptv_main,             file = "data/processed/data_federal_ptv_main.rdata")
+save(data_federal_ptv_noexcl,           file = "data/processed/data_federal_ptv_noexcl.rdata")
+save(data_federal_ptvties_main,         file = "data/processed/data_federal_ptvties_main.rdata")
+save(data_federal_ptvties_noexcl,       file = "data/processed/data_federal_ptvties_noexcl.rdata")
+save(data_federal_ptvscore_main,        file = "data/processed/data_federal_ptvscore_main.rdata")
+save(data_federal_ptvscore_noexcl,      file = "data/processed/data_federal_ptvscore_noexcl.rdata")
+save(data_federal_vi_main,              file = "data/processed/data_federal_vi_main.rdata")
+save(data_federal_vi_noexcl,            file = "data/processed/data_federal_vi_noexcl.rdata")
+save(data_federal_pid_main,             file = "data/processed/data_federal_pid_main.rdata")
+save(data_federal_pid_noexcl,           file = "data/processed/data_federal_pid_noexcl.rdata")
+```

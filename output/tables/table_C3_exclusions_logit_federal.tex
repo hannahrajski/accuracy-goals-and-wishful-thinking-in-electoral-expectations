@@ -1,0 +1,44 @@
+
+\begin{table}[t]
+\captionsetup{skip=3pt}
+\caption{Logistic Regression of Being Excluded (Answered 50\% Twice) on Treatment and Respondent Characteristics (Federal)}
+\centering
+\footnotesize
+\renewcommand{\arraystretch}{0.9}
+\begin{tabular}{l c}
+\toprule
+ & Excluded \\
+\midrule
+Intercept                  & $-1.77^{***}$ \\
+                           & $(0.18)$      \\
+T(5)                       & $-0.18^{*}$   \\
+                           & $(0.09)$      \\
+T(500)                     & $-0.34^{***}$ \\
+                           & $(0.09)$      \\
+Age 30-39                  & $0.08$        \\
+                           & $(0.12)$      \\
+Age 40-49                  & $0.03$        \\
+                           & $(0.12)$      \\
+Age 50-59                  & $-0.50^{***}$ \\
+                           & $(0.13)$      \\
+Age 60+                    & $-0.95^{***}$ \\
+                           & $(0.14)$      \\
+Gender: Women              & $-0.08$       \\
+                           & $(0.08)$      \\
+Education: Medium          & $-0.81^{***}$ \\
+                           & $(0.10)$      \\
+Education: High            & $-1.44^{***}$ \\
+                           & $(0.10)$      \\
+Education: Still in School & $-0.96^{*}$   \\
+                           & $(0.43)$      \\
+Intends to Vote            & $-0.64^{***}$ \\
+                           & $(0.08)$      \\
+State Fixed Effects & \checkmark \\
+\midrule
+Log Likelihood             & $-3202.63$    \\
+Num. obs.                  & $28618$       \\
+\bottomrule
+\multicolumn{2}{l}{\parbox{10cm}{\scriptsize{Note: * p < 0.05, ** p < 0.01, *** p < 0.001. Logistic regression of being excluded (answered 50\% for two parties) on treatment and respondent characteristics. Reference categories: Control group, age 18-29, gender Men (incl. diverse), education Low, no turnout intention, state Baden-Württemberg. The model includes fixed effects for the 16 federal states, whose coefficients are not shown.}}}
+\end{tabular}
+\label{tab:excl_logit_federal}
+\end{table}

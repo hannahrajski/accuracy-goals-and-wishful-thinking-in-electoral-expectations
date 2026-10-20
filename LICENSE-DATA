@@ -1,0 +1,23 @@
+Creative Commons Attribution 4.0 International (CC BY 4.0)
+
+Copyright (c) 2026 Team Zweitstimme.org (Hannah Rajski, Thomas Gschwend, Simon Munzert,
+Elias Koch, Lukas Stötzer, Cornelius Erfort)
+
+The survey data in data/input/survey/ (survey_federal.rdata, survey_saxony.rdata)
+are licensed under the Creative Commons Attribution 4.0 International License.
+
+You are free to share and adapt this material for any purpose, even commercially,
+as long as you give appropriate credit, provide a link to the license, and indicate
+if changes were made. Please cite the paper "Accuracy Goals and Wishful Thinking in
+Electoral Expectations" (Electoral Studies) when you use the data.
+
+Full license text: https://creativecommons.org/licenses/by/4.0/legalcode
+
+Not covered by this license: the official election results and statistics in
+data/input/results/ and data/input/benchmark/. They are published by the Federal
+Returning Officer, the Federal Statistical Office (Destatis) and the Statistisches
+Landesamt des Freistaates Sachsen and remain under the terms of their providers
+(see README.md for the sources).
+
+The code and its outputs (knitted reports, figures and tables) are licensed
+separately under the MIT License (see LICENSE).
