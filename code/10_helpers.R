@@ -905,26 +905,26 @@ compute_time_cutoff <- function(t) mean(t, na.rm = TRUE) + 2 * sd(t, na.rm = TRU
 ## Response Times (Figures B.1, B.2) -------------------------------------------
 
 # Figure B.1: individual response times (jittered)
-# Black line: mean
-# Colored line: outlier cutoff (mean + 2 SD)
+# Grayscale-safe: gray points kept, black points outliers
+# Dashed line: mean, solid line: outlier cutoff (mean + 2 SD)
 # data needs t_outlier
 plot_time_outliers <- function(data, t_mean, cutoff) {
-  color_outliers <- viridis(5, option = "D")[1]
   ggplot(data, aes(x = "", y = t_list_votes_exp_Page_Submit)) +
-    geom_jitter(aes(color = t_outlier), width = 0.2, alpha = 0.4, size = 0.5) +
-    geom_hline(yintercept = cutoff, linetype = "solid", color = color_outliers, size = 0.5) +
-    geom_hline(yintercept = t_mean, linetype = "solid", color = "black", size = 0.5) +
+    geom_jitter(aes(color = t_outlier, alpha = t_outlier), width = 0.2, size = 0.5) +
+    geom_hline(yintercept = cutoff, linetype = "solid", color = "black", size = 0.5) +
+    geom_hline(yintercept = t_mean, linetype = "dashed", color = "black", size = 0.5) +
     annotate("text",
       x = Inf, y = cutoff, # right-aligned at the panel edge, so the label is not cut off
       label = paste0("Outliers > ", round(cutoff, 0), "s"),
-      color = color_outliers, hjust = 1, vjust = -0.3, size = 5
+      color = "black", hjust = 1, vjust = -0.4, size = 3
     ) +
     annotate("text",
       x = Inf, y = t_mean,
       label = paste0("Mean: ", round(t_mean, 0), "s"),
-      color = "black", hjust = 1, vjust = -0.3, size = 5
+      color = "black", hjust = 1, vjust = -0.4, size = 3
     ) +
-    scale_color_viridis_d(option = "D", end = 0.8, direction = -1, begin = 0) +
+    scale_color_manual(values = c("FALSE" = "gray60", "TRUE" = "black")) +
+    scale_alpha_manual(values = c("FALSE" = 0.4, "TRUE" = 1)) + # outliers fully opaque
     scale_y_continuous(limits = c(0, 7500), expand = expansion(mult = c(0.015, 0.03))) + 
     labs(x = NULL, y = "Time in Seconds") +
     theme_minimal(base_size = 14) +
@@ -1111,8 +1111,8 @@ plot_pref_flow <- function(data, parties) {
 ## Vote Share Expectations (Figure 1) ------------------------------------------
 
 # Figure 1: distribution of the expected vote shares per party
-# Black line: election result
-# Gray line: mean expectation (dashed when equal to the result)
+# Solid black line: election result
+# Dashed gray line: mean expectation, same width, drawn on top
 plot_vote_share_dist <- function(data, election) {
   st <- get_election_style(election)
   data <- data %>% mutate(party = factor(st$recode_party(party), levels = st$party_levels_vote_share))
@@ -1125,15 +1125,14 @@ plot_vote_share_dist <- function(data, election) {
       result        = first(list_votes_result),
       .groups = "drop"
     ) %>%
-    mutate(
-      across(c(mean_forecast, result), ~ round(.x, 1)),
-      mean_linetype = if_else(result == mean_forecast, "dashed", "solid")
-    )
+    mutate(across(c(mean_forecast, result), ~ round(.x, 1)))
 
   theme_figure <- theme_minimal() +
     theme(
       axis.line.y    = element_blank(),
       axis.ticks.y   = element_blank(),
+      panel.grid.major.y = element_blank(), # would sit on the ridge baselines
+      panel.grid.minor   = element_blank(), # vertical lines only at the breaks (every 10)
       axis.line.x    = element_line(),
       axis.text.x    = element_text(size = 16),
       axis.text.y    = element_text(size = 16),
@@ -1149,16 +1148,14 @@ plot_vote_share_dist <- function(data, election) {
       data = cf,
       aes(x = result, xend = result,
           y = as.numeric(party), yend = as.numeric(party) + 0.95),
-      inherit.aes = FALSE, color = "black", linewidth = 0.6
+      inherit.aes = FALSE, color = "black", linetype = "solid", linewidth = 0.6
     ) +
     geom_segment(
       data = cf,
       aes(x = mean_forecast, xend = mean_forecast,
-          y = as.numeric(party), yend = as.numeric(party) + 0.95,
-          linetype = mean_linetype),
-      inherit.aes = FALSE, color = "gray", linewidth = 0.6
+          y = as.numeric(party), yend = as.numeric(party) + 0.95),
+      inherit.aes = FALSE, color = "gray50", linetype = "dashed", linewidth = 0.6
     ) +
-    scale_linetype_identity() + # use the linetype values as given
     scale_x_continuous(limits = st$vote_share_x_limits, expand = c(0, 0), breaks = st$vote_share_x_breaks) +
     scale_y_discrete(limits = levels(data$party), expand = expansion(mult = 0, add = c(0, 0.6))) +
     scale_fill_manual(values = color_parties) +
