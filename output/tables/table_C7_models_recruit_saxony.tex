@@ -1,0 +1,40 @@
+
+\begin{table}[t]
+\captionsetup{skip=3pt}
+\caption{Linear Regression Models for Saxony by Recruitment Channel}
+\centering
+\footnotesize
+\renewcommand{\arraystretch}{0.9}
+\begin{tabular}{l *{6}{>{\centering\arraybackslash}p{1.4cm}}}
+\toprule
+ & \multicolumn{2}{c}{H1} & \multicolumn{2}{c}{H2} & \multicolumn{2}{c}{H3} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+ & \multicolumn{1}{c}{OAP} & \multicolumn{1}{c}{SM} & \multicolumn{1}{c}{OAP} & \multicolumn{1}{c}{SM} & \multicolumn{1}{c}{OAP} & \multicolumn{1}{c}{SM} \\
+\cmidrule(lr){2-2} \cmidrule(lr){3-3} \cmidrule(lr){4-4} \cmidrule(lr){5-5} \cmidrule(lr){6-6} \cmidrule(lr){7-7}
+ & (1) & (1) & (2a) & (2a) & (3a) & (3a) \\
+\midrule
+Intercept                & $2.73^{***}$ & $3.19^{***}$ & $5.82^{***}$  & $3.48^{***}$ & $-5.05^{***}$ & $-0.19$      \\
+                         & $(0.10)$     & $(0.09)$     & $(0.35)$      & $(0.35)$     & $(0.38)$      & $(0.17)$     \\
+T(500) (ref: C)          & $0.13^{***}$ & $0.09^{***}$ & $-0.52^{***}$ & $-0.19^{*}$  & $0.39^{***}$  & $0.11^{*}$   \\
+                         & $(0.03)$     & $(0.02)$     & $(0.15)$      & $(0.08)$     & $(0.10)$      & $(0.05)$     \\
+Baseline Speed           & $0.71^{***}$ & $0.62^{***}$ &               &              &               &              \\
+                         & $(0.03)$     & $(0.03)$     &               &              &               &              \\
+Survey Duration          & $0.00^{***}$ & $0.00^{***}$ &               &              &               &              \\
+                         & $(0.00)$     & $(0.00)$     &               &              &               &              \\
+Preferred Party          &              &              &               &              & $12.32^{***}$ & $6.48^{***}$ \\
+                         &              &              &               &              & $(0.67)$      & $(0.25)$     \\
+T(500) x Preferred Party &              &              &               &              & $-3.23^{***}$ & $-1.10^{**}$ \\
+                         &              &              &               &              & $(0.81)$      & $(0.34)$     \\
+Date Fixed Effects & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+Party Fixed Effects & - & - & - & - & \checkmark & \checkmark \\
+Clustered SE & - & - & - & - & \checkmark & \checkmark \\
+\midrule
+R$^2$                    & $0.27$       & $0.18$       & $0.10$        & $0.02$       & $0.18$        & $0.20$       \\
+Adj. R$^2$               & $0.26$       & $0.17$       & $0.08$        & $0.01$       & $0.18$        & $0.20$       \\
+Num. obs.                & $2156$       & $3398$       & $2161$        & $3401$       & $13766$       & $23421$      \\
+Num. respondents & $2156$ & $3398$ & $2161$ & $3401$ & $1723$ & $2942$ \\
+\bottomrule
+\multicolumn{7}{l}{\parbox{14.2cm}{\scriptsize{Note: * p < 0.05, ** p < 0.01, *** p < 0.001. Models (1), (2a) and (3a) of Table~\ref{tab:models_saxony}, estimated separately for respondents recruited through the online access panel (OAP) and through social media (SM). Standard errors of (3a) clustered by respondent.}}}
+\end{tabular}
+\label{tab:models_recruit_saxony}
+\end{table}

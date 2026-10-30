@@ -1,0 +1,25 @@
+CC0 1.0 Universal (CC0 1.0) Public Domain Dedication
+
+Dedicated by Team Zweitstimme.org (Hannah Rajski, Thomas Gschwend, Simon Munzert,
+Elias Koch, Lukas Stötzer, Cornelius Erfort), 2026
+
+To the extent possible under law, the authors have waived all copyright and
+related or neighboring rights to the survey data in data/input/survey/
+(survey_federal.rdata, survey_saxony.rdata) by dedicating them to the public
+domain under CC0 1.0 Universal.
+
+You can copy, modify, distribute and use the data, even for commercial purposes,
+all without asking permission. Although not legally required, we ask that you cite
+the paper "Accuracy Goals and Wishful Thinking in Electoral Expectations"
+(Electoral Studies) when you use the data, in line with scholarly norms.
+
+Full legal text: https://creativecommons.org/publicdomain/zero/1.0/legalcode
+
+Not covered by this dedication: the official election results and statistics in
+data/input/results/ and data/input/benchmark/. They are published by the Federal
+Returning Officer, the Federal Statistical Office (Destatis) and the Statistisches
+Landesamt des Freistaates Sachsen and remain under the terms of their providers
+(see README.md for the sources).
+
+The code and its outputs (knitted reports, figures and tables) are licensed
+separately under the MIT License (see LICENSE).

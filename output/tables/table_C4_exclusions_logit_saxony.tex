@@ -1,0 +1,43 @@
+
+\begin{table}[t]
+\captionsetup{skip=3pt}
+\caption{Logistic Regression of Being Excluded (Allocated 100\% to One Party) on Treatment and Respondent Characteristics (Saxony)}
+\centering
+\footnotesize
+\renewcommand{\arraystretch}{0.9}
+\begin{tabular}{l c}
+\toprule
+ & Excluded \\
+\midrule
+Intercept                  & $-2.28^{***}$ \\
+                           & $(0.44)$      \\
+T(500)                     & $-0.71^{**}$  \\
+                           & $(0.22)$      \\
+Age 30-39                  & $0.07$        \\
+                           & $(0.40)$      \\
+Age 40-49                  & $0.09$        \\
+                           & $(0.39)$      \\
+Age 50-59                  & $0.08$        \\
+                           & $(0.38)$      \\
+Age 60+                    & $0.21$        \\
+                           & $(0.38)$      \\
+Gender: Women              & $0.10$        \\
+                           & $(0.21)$      \\
+Education: Medium          & $-0.37$       \\
+                           & $(0.34)$      \\
+Education: High            & $-0.95^{**}$  \\
+                           & $(0.37)$      \\
+Education: Still in School & $-14.24$      \\
+                           & $(460.29)$    \\
+Intends to Vote            & $-0.83^{**}$  \\
+                           & $(0.26)$      \\
+Recruited via Social Media & $-0.70^{**}$  \\
+                           & $(0.24)$      \\
+\midrule
+Log Likelihood             & $-454.79$     \\
+Num. obs.                  & $5557$        \\
+\bottomrule
+\multicolumn{2}{l}{\parbox{10cm}{\scriptsize{Note: * p < 0.05, ** p < 0.01, *** p < 0.001. Logistic regression of being excluded (allocated 100\% to one party) on treatment and respondent characteristics. Reference categories: Control group, age 18-29, gender Men (incl. diverse), education Low, no turnout intention, recruited via online access panel. The large standard error of Still in School results from the absence of excluded respondents in this category.}}}
+\end{tabular}
+\label{tab:excl_logit_saxony}
+\end{table}

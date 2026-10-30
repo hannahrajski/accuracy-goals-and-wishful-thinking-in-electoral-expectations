@@ -1,0 +1,44 @@
+
+\begin{table}[t]
+\captionsetup{skip=3pt}
+\caption{Linear Regression Models for Saxony}
+\centering
+\footnotesize
+\renewcommand{\arraystretch}{0.9}
+\begin{tabular}{l *{8}{>{\centering\arraybackslash}p{2cm}}}
+\toprule
+ & \multicolumn{1}{c}{H1} & \multicolumn{2}{c}{H2} & \multicolumn{5}{c}{H3} \\
+\cmidrule(lr){2-2} \cmidrule(lr){3-4} \cmidrule(lr){5-9}
+ & \multicolumn{1}{c}{Time} & \multicolumn{1}{c}{MAE} & \multicolumn{1}{c}{RMSE} & \multicolumn{1}{c}{PTV Dummy} & \multicolumn{1}{c}{\makecell{PTV Dummy \\ (incl. Ties)}} & \multicolumn{1}{c}{VI Dummy} & \multicolumn{1}{c}{PID Dummy} & \multicolumn{1}{c}{PTV Score} \\
+\cmidrule(lr){2-2} \cmidrule(lr){3-3} \cmidrule(lr){4-4} \cmidrule(lr){5-5} \cmidrule(lr){6-6} \cmidrule(lr){7-7} \cmidrule(lr){8-8} \cmidrule(lr){9-9}
+ & (1) & (2a) & (2b) & (3a) & (3b) & (3c) & (3d) & (3e) \\
+\midrule
+Intercept                & $2.69^{***}$ & $5.69^{***}$  & $7.53^{***}$  & $-2.02^{***}$ & $-1.94^{***}$ & $-2.36^{***}$ & $-2.12^{***}$ & $-3.56^{***}$ \\
+                         & $(0.07)$     & $(0.30)$      & $(0.43)$      & $(0.18)$      & $(0.18)$      & $(0.18)$      & $(0.19)$      & $(0.22)$      \\
+T(500) (ref: C)          & $0.10^{***}$ & $-0.29^{***}$ & $-0.44^{***}$ & $0.19^{***}$  & $0.19^{***}$  & $0.19^{***}$  & $0.17^{***}$  & $0.55^{***}$  \\
+                         & $(0.02)$     & $(0.08)$      & $(0.12)$      & $(0.05)$      & $(0.05)$      & $(0.05)$      & $(0.05)$      & $(0.12)$      \\
+Baseline Speed           & $0.75^{***}$ &               &               &               &               &               &               &               \\
+                         & $(0.02)$     &               &               &               &               &               &               &               \\
+Survey Duration          & $0.00^{***}$ &               &               &               &               &               &               &               \\
+                         & $(0.00)$     &               &               &               &               &               &               &               \\
+Preferred Party          &              &               &               & $8.51^{***}$  & $6.84^{***}$  & $8.75^{***}$  & $8.27^{***}$  &               \\
+                         &              &               &               & $(0.30)$      & $(0.24)$      & $(0.28)$      & $(0.30)$      &               \\
+T(500) x Preferred Party &              &               &               & $-1.69^{***}$ & $-1.25^{***}$ & $-1.75^{***}$ & $-1.48^{***}$ &               \\
+                         &              &               &               & $(0.37)$      & $(0.31)$      & $(0.36)$      & $(0.39)$      &               \\
+PTV Score                &              &               &               &               &               &               &               & $0.76^{***}$  \\
+                         &              &               &               &               &               &               &               & $(0.02)$      \\
+T(500) x PTV Score       &              &               &               &               &               &               &               & $-0.13^{***}$ \\
+                         &              &               &               &               &               &               &               & $(0.03)$      \\
+Date Fixed Effects & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+Party Fixed Effects & - & - & - & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+Clustered SE & - & - & - & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+\midrule
+R$^2$                    & $0.25$       & $0.07$        & $0.06$        & $0.16$        & $0.14$        & $0.16$        & $0.15$        & $0.15$        \\
+Adj. R$^2$               & $0.24$       & $0.06$        & $0.06$        & $0.16$        & $0.14$        & $0.16$        & $0.15$        & $0.15$        \\
+Num. obs.                & $5554$       & $5562$        & $5562$        & $37187$       & $44432$       & $42152$       & $37656$       & $44274$       \\
+Num. respondents & $5554$ & $5562$ & $5562$ & $4665$ & $5554$ & $5269$ & $4707$ & $5554$ \\
+\bottomrule
+\multicolumn{9}{l}{\parbox{\dimexpr\linewidth-2\tabcolsep\relax}{\scriptsize{Note: * p < 0.05, ** p < 0.01, *** p < 0.001. Different linear regression models have been estimated. All include survey date fixed effects. The first \textit{Time} model (1) has response latency (log(s)) as the dependent variable to test H1. Models (2a) and (2b) are concerned with overall accuracy, measured as \textit{MAE} and, as a robustness check, \textit{RMSE}, to test H2. For H3, the dependent variable is the forecast error (difference between respondents' expected vote share for a party and the actual result). Models include party fixed effects and standard errors are clustered by respondent. In Model (3a), the \textit{preferred party} is the party to which respondents assign the highest PTV; respondents who give the highest PTV to more than one party are not included. As robustness checks, the preferred party is operationalized as the party with the highest PTV including ties (Model (3b)), the party respondents intend to vote for (Model (3c)) or the party respondents identify with (Model (3d)). Model (3e) assesses degrees of party preference through the propensity to vote (measure from 1 to 11). For Models (3a)--(3e), \textit{Num. obs.} counts respondent $\times$ party observations and \textit{Num. respondents} the respondents.}}}
+\end{tabular}
+\label{tab:models_saxony}
+\end{table}
